@@ -1,0 +1,226 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #F5F3EE;
+  --foreground: #0A0A0A;
+  --card: #FFFFFF;
+  --card-foreground: #0A0A0A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0A0A0A;
+  --primary: #0047FF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F0EEE9;
+  --secondary-foreground: #0A0A0A;
+  --muted: #F0EEE9;
+  --muted-foreground: #6B6B6B;
+  --accent: #E8E5DF;
+  --accent-foreground: #0A0A0A;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: #E8E5DF;
+  --input: #FFFFFF;
+  --input-background: #F0EEE9;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #0047FF;
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #0A0A0A;
+  --sidebar-primary: #0047FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0EEE9;
+  --sidebar-accent-foreground: #0A0A0A;
+  --sidebar-border: #E8E5DF;
+  --sidebar-ring: #0047FF;
+}
+
+.dark {
+  --background: #0A0A0A;
+  --foreground: #F5F3EE;
+  --card: #141414;
+  --card-foreground: #F5F3EE;
+  --popover: #141414;
+  --popover-foreground: #F5F3EE;
+  --primary: #0047FF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1A1A1A;
+  --secondary-foreground: #F5F3EE;
+  --muted: #1A1A1A;
+  --muted-foreground: #888888;
+  --accent: #1A1A1A;
+  --accent-foreground: #F5F3EE;
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: #222222;
+  --input: #1A1A1A;
+  --ring: #0047FF;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: #141414;
+  --sidebar-foreground: #F5F3EE;
+  --sidebar-primary: #0047FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1A1A1A;
+  --sidebar-accent-foreground: #F5F3EE;
+  --sidebar-border: #222222;
+  --sidebar-ring: #0047FF;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* ─── Keyframes ─── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes float-alt {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-8px) rotate(1deg); }
+  66% { transform: translateY(-14px) rotate(-1deg); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(60px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(60px) rotate(-360deg); }
+}
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float       { animation: float 5s ease-in-out infinite; }
+.animate-float-alt   { animation: float-alt 7s ease-in-out infinite; }
+.animate-float-slow  { animation: float 8s ease-in-out infinite; }
+.animate-float-delay { animation: float 5s ease-in-out 1.5s infinite; }
+.animate-spin-slow   { animation: spin-slow 18s linear infinite; }
+.animate-orbit       { animation: orbit 8s linear infinite; }
+.animate-count-pop   { animation: count-pop 0.4s ease-in-out; }
+.animate-fade-up     { animation: fade-up 0.6s ease-out forwards; }
+
+/* Hover lift card */
+.card-lift {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1 {
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  h2 {
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  h3 {
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  h4 {
+    font-weight: 600;
+    line-height: 1.4;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}
