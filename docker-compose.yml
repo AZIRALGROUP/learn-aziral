@@ -1,0 +1,11 @@
+services:
+  learn-aziral:
+    build: .
+    container_name: learn-aziral
+    restart: always
+    networks:
+      - fenix_fenix-network
+
+networks:
+  fenix_fenix-network:
+    external: true
