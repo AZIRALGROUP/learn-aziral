@@ -90,6 +90,45 @@ export const instructorApi = {
     request(`/instructor/quizzes/${quizId}`, { method: 'DELETE' }),
 };
 
+// ── Standalone Tests ─────────────────────────────────────────────────────────
+export interface TestSummary {
+  id: number; title: string; description: string; category: string;
+  status: string; instructor_name: string; question_count: number;
+  created_at: string; updated_at: string;
+}
+export interface TestQuestion {
+  id: number; test_id: number; question: string;
+  type: 'single' | 'multi' | 'tf' | 'order';
+  options: string[]; items: { text: string; order: number }[];
+  correct: number[]; count: number; order_num: number;
+}
+export interface TestWithQuestions extends TestSummary { questions: TestQuestion[] }
+
+export const testsApi = {
+  // Public
+  list: () => request<TestSummary[]>('/tests'),
+  get: (id: number | string) => request<TestWithQuestions>(`/tests/${id}`),
+  // Instructor
+  myTests: () => request<TestSummary[]>('/instructor/tests'),
+  getForEdit: (id: number | string) => request<TestWithQuestions>(`/instructor/tests/${id}`),
+  create: (payload: { title: string; description?: string; category?: string }) =>
+    request<TestSummary>('/instructor/tests', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id: number | string, payload: object) =>
+    request(`/instructor/tests/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  delete: (id: number | string) =>
+    request(`/instructor/tests/${id}`, { method: 'DELETE' }),
+  togglePublish: (id: number | string) =>
+    request<{ ok: boolean; status: string }>(`/instructor/tests/${id}/publish`, { method: 'PATCH' }),
+  addQuestion: (testId: number | string, payload: object) =>
+    request<TestQuestion>(`/instructor/tests/${testId}/questions`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateQuestion: (questionId: number | string, payload: object) =>
+    request<TestQuestion>(`/instructor/test-questions/${questionId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteQuestion: (questionId: number | string) =>
+    request(`/instructor/test-questions/${questionId}`, { method: 'DELETE' }),
+  importQuestions: (testId: number | string, questions: object[]) =>
+    request<{ ok: boolean; imported: number }>(`/instructor/tests/${testId}/import`, { method: 'POST', body: JSON.stringify({ questions }) }),
+};
+
 // ── Notifications ─────────────────────────────────────────────────────────────
 export const notificationsApi = {
   myList: () => request<object[]>('/profile/notifications'),

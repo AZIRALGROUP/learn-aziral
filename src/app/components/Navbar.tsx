@@ -6,14 +6,11 @@ import { useAuth } from "../contexts/AuthContext";
 const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || "https://aziral.com";
 
 // Pages with their own full-screen top bars
-const HIDDEN_ROUTES = ["/learn", "/build"];
+const HIDDEN_ROUTES = ["/learn", "/build", "/instructor/tests"];
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
-
-  // Don't render on full-screen pages that have their own nav
-  if (HIDDEN_ROUTES.some(r => location.pathname.includes(r))) return null;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -31,8 +28,12 @@ export function Navbar() {
   // Close dropdown on route change
   useEffect(() => { setDropdownOpen(false); }, [location.pathname]);
 
+  // Don't render on full-screen pages that have their own nav
+  if (HIDDEN_ROUTES.some(r => location.pathname.includes(r))) return null;
+
   const navLinks = [
-    { label: "Каталог", href: "/" },
+    { label: "Каталог",     href: "/" },
+    { label: "Создание тестов", href: "/study" },
     { label: "Инструкторам", href: "/instructor" },
   ];
 
