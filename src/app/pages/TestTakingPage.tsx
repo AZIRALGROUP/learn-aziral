@@ -5,7 +5,7 @@ import { testsApi } from "../../api/client";
 import type { TestWithQuestions, TestQuestion } from "../../api/client";
 import {
   BookOpen, CheckCircle2, ClipboardList, ChevronLeft, ChevronRight,
-  RotateCcw, Trophy, Zap, Shuffle, ArrowLeft, XCircle,
+  RotateCcw, Zap, Shuffle, ArrowLeft, XCircle,
 } from "lucide-react";
 
 type Mode = "instant" | "batch";
