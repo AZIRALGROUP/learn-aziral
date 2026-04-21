@@ -29,9 +29,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
-  me: () => request<{ id: number; name: string; email: string; role: string }>('/auth/me'),
+  me: () => request<{
+    id: number; name: string; email: string; role: string;
+    username: string | null; avatar: string | null; bio: string | null;
+    notifications_enabled: number;
+  }>('/auth/me'),
   logout: () => request('/auth/logout', { method: 'POST' }),
   updateMe: (payload: object) => request('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
+  checkUsername: (username: string) =>
+    request<{ available: boolean; invalid?: boolean }>(`/auth/check-username?username=${encodeURIComponent(username)}`),
 };
 
 // ── Courses ───────────────────────────────────────────────────────────────────

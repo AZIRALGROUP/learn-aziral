@@ -6,6 +6,10 @@ export type User = {
   name: string;
   email: string;
   role: 'user' | 'instructor' | 'admin';
+  username?: string | null;
+  avatar?: string | null;
+  bio?: string | null;
+  notifications_enabled?: number;
 };
 
 const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || 'https://aziral.com';

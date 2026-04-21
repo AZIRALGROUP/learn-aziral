@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
@@ -6,10 +6,12 @@ import {
   User, Clock, CheckCircle2, AlertCircle, XCircle,
   LogOut, Settings,
   Bell, BellOff, CheckCheck,
-  BookOpen, GraduationCap, Zap, Play, CreditCard, ShieldCheck
+  BookOpen, GraduationCap, Zap, Play, CreditCard, ShieldCheck,
+  Camera, AtSign, Check, X as XIcon, Loader2,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "react-i18next";
+import { authApi } from "../../api/client";
 
 type Notification = {
   id: number; lead_id: string | null; type: string;
@@ -25,7 +27,7 @@ const NOTIF_ICONS: Record<string, { color: string; icon: typeof AlertCircle }> =
 
 export function ProfilePage() {
   usePageTitle("Личный кабинет — AZIRAL");
-  const { user, logout } = useAuth();
+  const { user, logout, refetch } = useAuth();
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -39,20 +41,83 @@ export function ProfilePage() {
   const [instructorApp, setInstructorApp] = useState<any>(null);
 
   // Settings
-  const [notifEnabled, setNotifEnabled] = useState(
-    (user as any)?.notifications_enabled !== 0
-  );
-  const [settForm, setSettForm] = useState({ name: user?.name || "", currentPassword: "", newPassword: "" });
+  const [notifEnabled, setNotifEnabled] = useState((user as any)?.notifications_enabled !== 0);
+  const [settForm, setSettForm] = useState({
+    name: user?.name || "",
+    username: user?.username || "",
+    bio: user?.bio || "",
+    currentPassword: "",
+    newPassword: "",
+  });
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar || null);
+  const [avatarData, setAvatarData] = useState<string | null | undefined>(undefined);
   const [settLoading, setSettLoading] = useState(false);
   const [settMsg, setSettMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [unCheck, setUnCheck] = useState<"idle" | "checking" | "ok" | "taken" | "invalid">("idle");
+  const unCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync toggle state when user loads asynchronously (auth/me response)
+  // Sync when user loads
   useEffect(() => {
     if (user) {
-      setNotifEnabled((user as any).notifications_enabled !== 0);
-      setSettForm(p => ({ ...p, name: user.name }));
+      setNotifEnabled(user.notifications_enabled !== 0);
+      setSettForm(p => ({ ...p, name: user.name, username: user.username || "", bio: user.bio || "" }));
+      setAvatarPreview(user.avatar || null);
     }
   }, [user]);
+
+  /** Crop + resize to 256×256 JPEG */
+  const processAvatar = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = ev => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 256; canvas.height = 256;
+          const ctx = canvas.getContext("2d")!;
+          const min = Math.min(img.width, img.height);
+          ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, 256, 256);
+          resolve(canvas.toDataURL("image/jpeg", 0.88));
+        };
+        img.src = ev.target!.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      const data = await processAvatar(file);
+      setAvatarPreview(data);
+      setAvatarData(data);
+    } catch { /* ignore */ }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null);
+    setAvatarData(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  /** Debounced username check */
+  const handleUsernameChange = (val: string) => {
+    setSettForm(p => ({ ...p, username: val }));
+    if (unCheckTimer.current) clearTimeout(unCheckTimer.current);
+    const clean = val.trim().toLowerCase();
+    if (!clean || clean === (user?.username || "")) { setUnCheck("idle"); return; }
+    if (!/^[a-z0-9_]{3,30}$/.test(clean)) { setUnCheck("invalid"); return; }
+    setUnCheck("checking");
+    unCheckTimer.current = setTimeout(async () => {
+      try {
+        const d = await authApi.checkUsername(clean);
+        setUnCheck(d.available ? "ok" : "taken");
+      } catch { setUnCheck("idle"); }
+    }, 500);
+  };
 
 
   const creds = { credentials: 'include' as const };
@@ -86,17 +151,31 @@ export function ProfilePage() {
   const handleSettSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSettMsg(null);
+    if (unCheck === "taken") { setSettMsg({ type: "err", text: "Никнейм уже занят" }); return; }
+    if (unCheck === "invalid") { setSettMsg({ type: "err", text: "Никнейм: 3–30 символов, только a-z, 0-9 и _" }); return; }
     setSettLoading(true);
     try {
-      const r = await fetch("/api/auth/me", {
-        method: "PATCH",
-        credentials: 'include', headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...settForm, notifications_enabled: notifEnabled }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
-      setSettMsg({ type: "ok", text: t("profile.data_updated") });
+      const body: Record<string, unknown> = {
+        name: settForm.name,
+        bio: settForm.bio.trim() || null,
+        notifications_enabled: notifEnabled,
+      };
+      const cleanUN = settForm.username.trim().toLowerCase();
+      if (cleanUN !== (user?.username || "")) body.username = cleanUN || null;
+      if (avatarData !== undefined) body.avatar = avatarData;
+      if (settForm.newPassword) {
+        body.currentPassword = settForm.currentPassword;
+        body.newPassword = settForm.newPassword;
+      }
+      const data = await authApi.updateMe(body);
+      if ((data as any).user) {
+        // update local user state via refetch
+        await refetch();
+      }
+      setSettMsg({ type: "ok", text: "Профиль обновлён ✓" });
       setSettForm(p => ({ ...p, currentPassword: "", newPassword: "" }));
+      setAvatarData(undefined);
+      setUnCheck("idle");
     } catch (err: any) {
       setSettMsg({ type: "err", text: err.message });
     } finally {
@@ -115,14 +194,21 @@ export function ProfilePage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br [#0047FF] rounded-2xl flex items-center justify-center text-[#0A0A0A] text-xl font-bold shadow-lg shadow-black/10">
-              {user?.name?.[0]?.toUpperCase()}
+            <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-lg shadow-black/10">
+              {user?.avatar
+                ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                : <div className="w-full h-full bg-[#0047FF] flex items-center justify-center text-white text-xl font-bold">{user?.name?.[0]?.toUpperCase()}</div>
+              }
             </div>
             <div>
               <h1 className="text-[#0A0A0A] text-xl font-medium">{user?.name}</h1>
-              <p className="text-[#6B6B6B] text-sm">{user?.email}</p>
+              {user?.username
+                ? <p className="text-[#0047FF] text-sm font-medium">@{user.username}</p>
+                : <p className="text-[#6B6B6B] text-sm">{user?.email}</p>
+              }
+              {user?.bio && <p className="text-[#6B6B6B] text-sm mt-0.5 max-w-xs leading-snug">{user.bio}</p>}
               {userXp > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mt-1">
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mt-1.5 w-fit">
                   <Zap className="w-3.5 h-3.5 text-yellow-400" />
                   <span className="text-yellow-600 text-sm font-semibold">{userXp} XP</span>
                 </div>
@@ -340,69 +426,126 @@ export function ProfilePage() {
 
         {/* Settings tab */}
         {tab === "settings" && (
-          <form onSubmit={handleSettSubmit} className="bg-[#F5F3EE] border border-[#E8E5DF] rounded-2xl p-6 space-y-5 max-w-lg">
-            <h3 className="text-[#0A0A0A] mb-2">{t("profile.personal_data")}</h3>
+          <form onSubmit={handleSettSubmit} className="space-y-4 max-w-lg">
 
             {settMsg && (
-              <div className={`px-4 py-3 rounded-xl text-sm border ${settMsg.type === "ok" ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                className={`px-4 py-3 rounded-xl text-sm border ${settMsg.type === "ok" ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-600"}`}>
                 {settMsg.text}
-              </div>
+              </motion.div>
             )}
 
-            <div>
-              <label className="block text-[#6B6B6B] text-sm mb-2">{t("profile.name")}</label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B6B6B]" />
-                <input
-                  value={settForm.name}
-                  onChange={e => setSettForm(p => ({ ...p, name: e.target.value }))}
-                  className="w-full bg-[#F5F3EE] border border-[#E8E5DF] focus:border-[#0047FF]/50 rounded-xl pl-10 pr-4 py-3 text-[#0A0A0A] outline-none transition-colors"
-                />
+            {/* ── Avatar ── */}
+            <div className="bg-white border border-[#E8E5DF] rounded-2xl p-6">
+              <p className="text-[#0A0A0A] font-medium text-sm mb-4">Фото профиля</p>
+              <div className="flex items-center gap-5">
+                <div className="relative shrink-0 group">
+                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#E8E5DF]">
+                    {avatarPreview
+                      ? <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full bg-[#0047FF] flex items-center justify-center text-white text-2xl font-bold">{user?.name?.[0]?.toUpperCase()}</div>
+                    }
+                  </div>
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Camera className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="px-4 py-2 bg-[#0047FF] hover:bg-[#0038CC] text-white text-sm rounded-xl transition-colors">
+                    Загрузить фото
+                  </button>
+                  {avatarPreview && (
+                    <button type="button" onClick={handleRemoveAvatar}
+                      className="px-4 py-2 bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] hover:text-red-600 hover:border-red-200 text-sm rounded-xl transition-colors">
+                      Удалить фото
+                    </button>
+                  )}
+                  <p className="text-[11px] text-[#B0ADA8]">JPG, PNG, GIF · до 10 МБ · обрезается до квадрата 256×256</p>
+                </div>
+              </div>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </div>
+
+            {/* ── Identity ── */}
+            <div className="bg-white border border-[#E8E5DF] rounded-2xl p-6 space-y-4">
+              <p className="text-[#0A0A0A] font-medium text-sm">Профиль</p>
+
+              <div>
+                <label className="block text-[#6B6B6B] text-xs font-medium mb-1.5">Отображаемое имя</label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#C0BDB8]" />
+                  <input value={settForm.name} onChange={e => setSettForm(p => ({ ...p, name: e.target.value }))}
+                    placeholder="Иван Иванов"
+                    className="w-full bg-[#F8F7F4] border border-[#E8E5DF] focus:border-[#0047FF] rounded-xl pl-10 pr-4 py-3 text-[#0A0A0A] outline-none transition-colors text-sm" />
+                </div>
+                <p className="mt-1 text-[11px] text-[#B0ADA8]">Видно всем. Может быть любым.</p>
+              </div>
+
+              <div>
+                <label className="block text-[#6B6B6B] text-xs font-medium mb-1.5">Никнейм</label>
+                <div className="relative">
+                  <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#C0BDB8]" />
+                  <input value={settForm.username} onChange={e => handleUsernameChange(e.target.value)}
+                    placeholder="username" autoComplete="username"
+                    className={`w-full bg-[#F8F7F4] border rounded-xl pl-10 pr-10 py-3 text-[#0A0A0A] outline-none transition-colors text-sm ${
+                      unCheck === "taken" || unCheck === "invalid" ? "border-red-400 focus:border-red-400"
+                      : unCheck === "ok" ? "border-green-400 focus:border-green-400"
+                      : "border-[#E8E5DF] focus:border-[#0047FF]"
+                    }`} />
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    {unCheck === "checking" && <Loader2 className="w-4 h-4 text-[#B0ADA8] animate-spin" />}
+                    {unCheck === "ok" && <Check className="w-4 h-4 text-green-500" />}
+                    {(unCheck === "taken" || unCheck === "invalid") && <XIcon className="w-4 h-4 text-red-500" />}
+                  </div>
+                </div>
+                <p className={`mt-1 text-[11px] ${unCheck === "ok" ? "text-green-600" : unCheck === "taken" || unCheck === "invalid" ? "text-red-500" : "text-[#B0ADA8]"}`}>
+                  {unCheck === "ok" ? "Никнейм свободен ✓"
+                    : unCheck === "taken" ? "Никнейм занят — выберите другой"
+                    : unCheck === "invalid" ? "3–30 символов, только a-z, 0-9 и _"
+                    : "3–30 символов · a-z, 0-9, _ · Для входа вместо email"}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[#6B6B6B] text-xs font-medium mb-1.5">О себе</label>
+                <textarea value={settForm.bio} onChange={e => setSettForm(p => ({ ...p, bio: e.target.value.slice(0, 300) }))}
+                  placeholder="Расскажите о себе пару слов..." rows={3}
+                  className="w-full bg-[#F8F7F4] border border-[#E8E5DF] focus:border-[#0047FF] rounded-xl px-4 py-3 text-[#0A0A0A] placeholder-[#C0BDB8] outline-none transition-colors text-sm resize-none leading-relaxed" />
+                <p className="mt-1 text-[11px] text-[#B0ADA8] text-right">{settForm.bio.length}/300</p>
               </div>
             </div>
 
-            {/* Notifications toggle */}
-            <div className="pt-2">
-              <label className="block text-[#6B6B6B] text-sm mb-3">Уведомления</label>
-              <button
-                type="button"
-                onClick={() => setNotifEnabled(v => !v)}
-                className={`flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 ${
-                  notifEnabled
-                    ? "bg-blue-500/10 border-blue-500/30"
-                    : "bg-[#F5F3EE] border-[#E8E5DF]"
-                }`}
-              >
+            {/* ── Notifications ── */}
+            <div className="bg-white border border-[#E8E5DF] rounded-2xl p-6">
+              <p className="text-[#0A0A0A] font-medium text-sm mb-3">Уведомления</p>
+              <button type="button" onClick={() => setNotifEnabled(v => !v)}
+                className={`flex items-center justify-between w-full p-4 rounded-xl border transition-all duration-200 ${notifEnabled ? "bg-blue-50 border-blue-200" : "bg-[#F8F7F4] border-[#E8E5DF]"}`}>
                 <div className="flex items-center gap-3">
-                  {notifEnabled
-                    ? <Bell className="w-5 h-5 text-blue-400" />
-                    : <BellOff className="w-5 h-5 text-[#6B6B6B]" />}
+                  {notifEnabled ? <Bell className="w-5 h-5 text-[#0047FF]" /> : <BellOff className="w-5 h-5 text-[#6B6B6B]" />}
                   <div className="text-left">
-                    <div className={`text-sm font-medium ${notifEnabled ? "text-[#0A0A0A]" : "text-[#6B6B6B]"}`}>
-                      Email-уведомления
-                    </div>
-                    <div className="text-xs text-[#6B6B6B]">
-                      {notifEnabled ? "Вы получаете письма при изменении статуса" : "Письма отключены"}
-                    </div>
+                    <div className={`text-sm font-medium ${notifEnabled ? "text-[#0A0A0A]" : "text-[#6B6B6B]"}`}>Email-уведомления</div>
+                    <div className="text-xs text-[#6B6B6B]">{notifEnabled ? "Вы получаете письма при изменении статуса" : "Письма отключены"}</div>
                   </div>
                 </div>
-                {/* Toggle pill */}
-                <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 overflow-hidden shrink-0 ${notifEnabled ? "bg-blue-600" : "bg-[#EDEAE4]"}`}>
+                <div className={`relative w-12 h-6 rounded-full transition-colors duration-200 overflow-hidden shrink-0 ${notifEnabled ? "bg-[#0047FF]" : "bg-[#EDEAE4]"}`}>
                   <span className={`absolute top-[2px] left-[2px] w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${notifEnabled ? "translate-x-6" : "translate-x-0"}`} />
                 </div>
               </button>
             </div>
 
-            <div className="pt-4 border-t border-[#E8E5DF]">
-              <p className="text-[#6B6B6B] text-sm mb-4">Изменить пароль</p>
-              <div className="space-y-3">
-                <input type="password" value={settForm.currentPassword} onChange={e => setSettForm(p => ({ ...p, currentPassword: e.target.value }))} placeholder={t("profile.current_password")} className="w-full bg-[#F5F3EE] border border-[#E8E5DF] focus:border-[#0047FF]/50 rounded-xl px-4 py-3 text-[#0A0A0A] placeholder-[#A0A0A0] outline-none transition-colors" />
-                <input type="password" value={settForm.newPassword} onChange={e => setSettForm(p => ({ ...p, newPassword: e.target.value }))} placeholder={t("profile.new_password")} className="w-full bg-[#F5F3EE] border border-[#E8E5DF] focus:border-[#0047FF]/50 rounded-xl px-4 py-3 text-[#0A0A0A] placeholder-[#A0A0A0] outline-none transition-colors" />
-              </div>
+            {/* ── Password ── */}
+            <div className="bg-white border border-[#E8E5DF] rounded-2xl p-6 space-y-3">
+              <p className="text-[#0A0A0A] font-medium text-sm">Изменить пароль</p>
+              <input type="password" value={settForm.currentPassword} onChange={e => setSettForm(p => ({ ...p, currentPassword: e.target.value }))} placeholder={t("profile.current_password")} className="w-full bg-[#F8F7F4] border border-[#E8E5DF] focus:border-[#0047FF] rounded-xl px-4 py-3 text-[#0A0A0A] placeholder-[#C0BDB8] outline-none transition-colors text-sm" />
+              <input type="password" value={settForm.newPassword} onChange={e => setSettForm(p => ({ ...p, newPassword: e.target.value }))} placeholder={t("profile.new_password")} className="w-full bg-[#F8F7F4] border border-[#E8E5DF] focus:border-[#0047FF] rounded-xl px-4 py-3 text-[#0A0A0A] placeholder-[#C0BDB8] outline-none transition-colors text-sm" />
             </div>
 
-            <button type="submit" disabled={settLoading} className="px-6 py-3 bg-[#0047FF] text-white rounded-xl text-sm transition-all disabled:opacity-70">
-              {settLoading ? t("profile.saving") : t("profile.save")}
+            <button type="submit"
+              disabled={settLoading || unCheck === "checking" || unCheck === "taken" || unCheck === "invalid"}
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#0047FF] hover:bg-[#0038CC] disabled:opacity-60 text-white rounded-xl font-medium transition-colors duration-200">
+              {settLoading ? <><Loader2 className="w-4 h-4 animate-spin" />Сохраняем...</> : "Сохранить изменения"}
             </button>
           </form>
         )}

@@ -96,18 +96,32 @@ export function Navbar() {
                 onClick={() => setDropdownOpen(v => !v)}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#EDEAE4] transition-colors"
               >
-                <div className="w-7 h-7 bg-[#0047FF] rounded-lg flex items-center justify-center text-white text-xs font-bold">
-                  {user.name?.[0]?.toUpperCase()}
+                <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0">
+                  {user.avatar
+                    ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                    : <div className="w-full h-full bg-[#0047FF] flex items-center justify-center text-white text-xs font-bold">{user.name?.[0]?.toUpperCase()}</div>
+                  }
                 </div>
                 <span className="hidden sm:block text-[#0A0A0A] text-sm max-w-[120px] truncate">{user.name}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-[#6B6B6B] transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
               </button>
 
               {dropdownOpen && (
-                <div className="absolute right-0 mt-1 w-48 bg-[#F5F3EE] border border-[#E8E5DF] rounded-2xl shadow-lg shadow-black/10 overflow-hidden py-1">
-                  <div className="px-3 py-2 border-b border-[#E8E5DF]">
-                    <p className="text-[#0A0A0A] text-sm font-medium truncate">{user.name}</p>
-                    <p className="text-[#8A8A8A] text-xs truncate">{user.email}</p>
+                <div className="absolute right-0 mt-1 w-52 bg-[#F5F3EE] border border-[#E8E5DF] rounded-2xl shadow-lg shadow-black/10 overflow-hidden py-1">
+                  <div className="px-3 py-2.5 border-b border-[#E8E5DF] flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0">
+                      {user.avatar
+                        ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-[#0047FF] flex items-center justify-center text-white text-sm font-bold">{user.name?.[0]?.toUpperCase()}</div>
+                      }
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[#0A0A0A] text-sm font-medium truncate">{user.name}</p>
+                      {user.username
+                        ? <p className="text-[#0047FF] text-xs truncate">@{user.username}</p>
+                        : <p className="text-[#8A8A8A] text-xs truncate">{user.email}</p>
+                      }
+                    </div>
                   </div>
                   <Link
                     to="/profile"
