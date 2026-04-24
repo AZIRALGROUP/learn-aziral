@@ -31,10 +31,16 @@ export function Navbar() {
   // Don't render on full-screen pages that have their own nav
   if (HIDDEN_ROUTES.some(r => location.pathname.includes(r))) return null;
 
+  const isInstructor = user?.role === "instructor" || user?.role === "admin";
+
   const navLinks = [
-    { label: "Каталог",     href: "/" },
-    { label: "Создание тестов", href: "/study" },
-    { label: "Инструкторам", href: "/instructor" },
+    { label: "Каталог",         href: "/",          external: false },
+    { label: "Создание тестов", href: "/study",      external: false },
+    {
+      label: "Инструкторам",
+      href: isInstructor ? "/instructor" : `${MAIN_SITE}/instructor`,
+      external: !isInstructor,
+    },
   ];
 
   const isActive = (href: string) =>
@@ -65,19 +71,29 @@ export function Navbar() {
 
         {/* Nav links (desktop) */}
         <nav className="hidden md:flex items-center gap-1">
-          {navLinks.map(link => (
-            <Link
-              key={link.href}
-              to={link.href}
-              className={`px-3.5 py-2 rounded-xl text-sm transition-colors ${
-                isActive(link.href)
-                  ? "bg-[#0047FF]/10 text-[#0047FF] font-medium"
-                  : "text-[#6B6B6B] hover:text-[#0A0A0A] hover:bg-[#EDEAE4]"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map(link =>
+            link.external ? (
+              <a
+                key={link.href}
+                href={link.href}
+                className="px-3.5 py-2 rounded-xl text-sm text-[#6B6B6B] hover:text-[#0A0A0A] hover:bg-[#EDEAE4] transition-colors"
+              >
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                key={link.href}
+                to={link.href}
+                className={`px-3.5 py-2 rounded-xl text-sm transition-colors ${
+                  isActive(link.href)
+                    ? "bg-[#0047FF]/10 text-[#0047FF] font-medium"
+                    : "text-[#6B6B6B] hover:text-[#0A0A0A] hover:bg-[#EDEAE4]"
+                }`}
+              >
+                {link.label}
+              </Link>
+            )
+          )}
           <a
             href={MAIN_SITE}
             target="_blank"
