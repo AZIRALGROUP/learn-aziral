@@ -190,7 +190,7 @@ export function CourseBuilderPage() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  });
+  }, [lessons, selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Delete lesson
   const deleteLesson = async (lesson: Lesson) => {
@@ -198,7 +198,10 @@ export function CourseBuilderPage() {
     if (!lesson._new && lesson.id) {
       await fetch(`/api/instructor/lessons/${lesson.id}`, { method: "DELETE", credentials: 'include' });
     }
-    setLessons(prev => prev.filter(l => l.id !== lesson.id && l.order_num !== selectedId));
+    setLessons(prev => prev.filter(l => {
+      if (lesson.id) return l.id !== lesson.id;
+      return !(l._new && l.order_num === lesson.order_num);
+    }));
     setSelectedId(null);
   };
 

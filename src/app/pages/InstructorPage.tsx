@@ -404,7 +404,7 @@ export function InstructorPage() {
             <p className="text-[#6B6B6B] text-sm mt-1">Добро пожаловать, {user.name} 👋</p>
           </div>
           <button onClick={openCreate}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-[#0A0A0A] text-sm rounded-xl transition-all hover:scale-105 shadow-lg shadow-black/8">
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white text-sm rounded-xl transition-all hover:scale-105 shadow-lg shadow-black/8">
             <Plus className="w-4 h-4" /> Новый курс
           </button>
         </div>

@@ -34,18 +34,18 @@ function ModeSelector({ test, onStart }: {
       <div className="flex flex-wrap gap-3">
         <span className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#E8E5DF] rounded-xl text-sm">
           <CheckCircle2 className="w-4 h-4 text-[#0047FF]" />
-          <strong>{test.questions.length}</strong> Questions
+          <strong>{test.questions.length}</strong> Вопросов
         </span>
         {multiCount > 0 && (
           <span className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#E8E5DF] rounded-xl text-sm">
             <CheckCircle2 className="w-4 h-4 text-[#0047FF]" />
-            <strong>{multiCount}</strong> Multi-choice
+            <strong>{multiCount}</strong> Несколько ответов
           </span>
         )}
         {tfCount > 0 && (
           <span className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-[#E8E5DF] rounded-xl text-sm">
             <CheckCircle2 className="w-4 h-4 text-[#0047FF]" />
-            <strong>{tfCount}</strong> True / False
+            <strong>{tfCount}</strong> Правда/Ложь
           </span>
         )}
       </div>
@@ -57,7 +57,7 @@ function ModeSelector({ test, onStart }: {
             <BookOpen className="w-5 h-5 text-[#0047FF]" />
           </div>
           <h2 className="text-xl font-bold text-[#0A0A0A]">{test.title}</h2>
-          <p className="text-sm text-[#6B6B6B]">{test.questions.length} questions · Choose how you want to take it</p>
+          <p className="text-sm text-[#6B6B6B]">{test.questions.length} вопросов · Выберите режим прохождения</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -70,8 +70,8 @@ function ModeSelector({ test, onStart }: {
             <div className="w-9 h-9 rounded-lg bg-[#0047FF]/10 flex items-center justify-center mb-3">
               <Zap className="w-4 h-4 text-[#0047FF]" />
             </div>
-            <div className="font-semibold text-[#0A0A0A] text-sm">Check as you go</div>
-            <div className="text-xs text-[#6B6B6B] mt-1">See correct/wrong immediately after each answer</div>
+            <div className="font-semibold text-[#0A0A0A] text-sm">Проверять по ходу</div>
+            <div className="text-xs text-[#6B6B6B] mt-1">Сразу видите ответ — правильный или нет</div>
           </button>
           <button onClick={() => setSelected("batch")}
             className={`text-left p-5 rounded-xl border-2 transition-all ${
@@ -82,8 +82,8 @@ function ModeSelector({ test, onStart }: {
             <div className="w-9 h-9 rounded-lg bg-[#6B6B6B]/10 flex items-center justify-center mb-3">
               <ClipboardList className="w-4 h-4 text-[#6B6B6B]" />
             </div>
-            <div className="font-semibold text-[#0A0A0A] text-sm">Answer all, then results</div>
-            <div className="text-xs text-[#6B6B6B] mt-1">Answer everything first, see the full score at the end</div>
+            <div className="font-semibold text-[#0A0A0A] text-sm">Ответить всё, затем результаты</div>
+            <div className="text-xs text-[#6B6B6B] mt-1">Сначала ответьте на всё, затем увидите итог</div>
           </button>
         </div>
 
@@ -96,8 +96,8 @@ function ModeSelector({ test, onStart }: {
             <Shuffle className="w-4 h-4 text-[#6B6B6B]" />
           </div>
           <div className="text-left flex-1">
-            <div className="font-semibold text-sm text-[#0A0A0A]">Shuffle questions</div>
-            <div className="text-xs text-[#6B6B6B]">Questions appear in a random order each time</div>
+            <div className="font-semibold text-sm text-[#0A0A0A]">Перемешать вопросы</div>
+            <div className="text-xs text-[#6B6B6B]">Вопросы будут в случайном порядке каждый раз</div>
           </div>
           <div className={`w-10 h-6 rounded-full relative transition-colors ${shuffle ? "bg-[#0047FF]" : "bg-[#D1D1D1]"}`}>
             <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${shuffle ? "left-5" : "left-1"}`} />
@@ -106,7 +106,7 @@ function ModeSelector({ test, onStart }: {
 
         <button onClick={() => onStart(selected, shuffle)}
           className="w-full py-3.5 rounded-xl bg-[#0047FF] text-white font-semibold text-sm hover:bg-[#0038CC] transition-colors">
-          Start Test →
+          Начать тест →
         </button>
       </div>
     </div>
@@ -177,7 +177,7 @@ function Quiz({ questions, mode, onFinish }: {
     });
     const pct = scorableCount ? Math.round((correctCount / scorableCount) * 100) : 0;
     const emoji = pct >= 90 ? "🏆" : pct >= 75 ? "👍" : pct >= 60 ? "📖" : "💪";
-    const label = pct >= 90 ? "Excellent! You are ready!" : pct >= 75 ? "Good result!" : pct >= 60 ? "Keep studying!" : "More practice needed";
+    const label = pct >= 90 ? "Отлично! Вы готовы!" : pct >= 75 ? "Хороший результат!" : pct >= 60 ? "Учитесь дальше!" : "Нужно больше практики";
 
     return (
       <div className="space-y-6">
@@ -187,37 +187,37 @@ function Quiz({ questions, mode, onFinish }: {
           <div className="flex gap-4 justify-center flex-wrap">
             <div className="bg-[#F5F3EE] rounded-xl px-5 py-3 min-w-[90px]">
               <div className="text-2xl font-bold text-green-600">{correctCount}</div>
-              <div className="text-xs text-[#6B6B6B]">Correct</div>
+              <div className="text-xs text-[#6B6B6B]">Верно</div>
             </div>
             <div className="bg-[#F5F3EE] rounded-xl px-5 py-3 min-w-[90px]">
               <div className="text-2xl font-bold text-red-500">{wrongCount}</div>
-              <div className="text-xs text-[#6B6B6B]">Wrong</div>
+              <div className="text-xs text-[#6B6B6B]">Неверно</div>
             </div>
             <div className="bg-[#F5F3EE] rounded-xl px-5 py-3 min-w-[90px]">
               <div className="text-2xl font-bold text-[#0047FF]">{scorableCount}</div>
-              <div className="text-xs text-[#6B6B6B]">Total</div>
+              <div className="text-xs text-[#6B6B6B]">Всего</div>
             </div>
           </div>
           <div className="flex gap-3 justify-center pt-2">
             <button onClick={onFinish} className="px-5 py-2.5 rounded-xl bg-[#0047FF] text-white text-sm font-medium hover:bg-[#0038CC] transition-colors inline-flex items-center gap-2">
-              <RotateCcw className="w-4 h-4" /> Restart
+              <RotateCcw className="w-4 h-4" /> Начать заново
             </button>
             <Link to="/study" className="px-5 py-2.5 rounded-xl border border-[#E8E5DF] text-sm font-medium text-[#6B6B6B] hover:bg-[#F0EEE9] transition-colors inline-flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" /> Back to tests
+              <ArrowLeft className="w-4 h-4" /> К тестам
             </Link>
           </div>
         </div>
 
         {/* review */}
-        <h3 className="text-lg font-bold text-[#0A0A0A]">Review All Questions</h3>
+        <h3 className="text-lg font-bold text-[#0A0A0A]">Разбор ответов</h3>
         <div className="space-y-3">
           {questions.map((qq, i) => {
             if (qq.type === "order") {
               return (
                 <div key={i} className="bg-white border border-[#0047FF]/10 rounded-xl p-4">
                   <div className="flex items-start gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-[#0047FF]/10 text-[#0047FF]">ORDER</span>
-                    <span className="font-semibold text-sm text-[#0A0A0A]">Q{i + 1}</span>
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-[#0047FF]/10 text-[#0047FF]">ПОРЯДОК</span>
+                    <span className="font-semibold text-sm text-[#0A0A0A]">В{i + 1}</span>
                   </div>
                   <p className="text-sm text-[#3A3A3A] mb-2">{qq.question}</p>
                   <div className="text-sm text-[#0047FF]">
@@ -228,8 +228,8 @@ function Quiz({ questions, mode, onFinish }: {
             }
             const a = answers[i] || [];
             const ok = arrEq(a, qq.correct);
-            const labels = qq.type === "tf" ? ["True", "False"] : qq.options;
-            const yourText = a.length ? a.map(x => labels[x]).join(", ") : "(no answer)";
+            const labels = qq.type === "tf" ? ["Верно", "Неверно"] : qq.options;
+            const yourText = a.length ? a.map(x => labels[x]).join(", ") : "(нет ответа)";
             const correctText = qq.correct.map(x => labels[x]).join(", ");
             return (
               <div key={i} className={`bg-white border rounded-xl p-4 ${ok ? "border-green-200" : "border-red-200"}`}>
@@ -237,11 +237,11 @@ function Quiz({ questions, mode, onFinish }: {
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                     {ok ? "✓" : "✗"}
                   </span>
-                  <span className="font-semibold text-sm text-[#0A0A0A]">Q{i + 1}</span>
+                  <span className="font-semibold text-sm text-[#0A0A0A]">В{i + 1}</span>
                 </div>
                 <p className="text-sm text-[#3A3A3A] mb-2">{qq.question}</p>
-                {!ok && <p className="text-xs text-red-500">Your answer: {yourText}</p>}
-                <p className="text-xs text-green-600">Correct: {correctText}</p>
+                {!ok && <p className="text-xs text-red-500">Ваш ответ: {yourText}</p>}
+                <p className="text-xs text-green-600">Правильно: {correctText}</p>
               </div>
             );
           })}
@@ -276,11 +276,11 @@ function Quiz({ questions, mode, onFinish }: {
       {mode === "batch" && (
         <div className="flex items-center justify-between bg-white border border-[#E8E5DF] rounded-xl px-4 py-3 flex-wrap gap-3">
           <div>
-            <div className="font-semibold text-sm text-[#0A0A0A]">Answer all, then results</div>
-            <div className="text-xs text-[#0047FF]">Answered: {answeredCount} / {scorableCount}</div>
+            <div className="font-semibold text-sm text-[#0A0A0A]">Ответить всё, затем результаты</div>
+            <div className="text-xs text-[#0047FF]">Отвечено: {answeredCount} / {scorableCount}</div>
           </div>
           <button onClick={submitAll} className="px-4 py-2 rounded-lg bg-[#0047FF] text-white text-sm font-medium hover:bg-[#0038CC] transition-colors">
-            See Results 🎯
+            Результаты 🎯
           </button>
         </div>
       )}
@@ -288,17 +288,17 @@ function Quiz({ questions, mode, onFinish }: {
       {/* question card */}
       <div className="bg-white border border-[#E8E5DF] rounded-2xl p-5 sm:p-6">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="px-2.5 py-1 rounded-lg bg-[#0047FF] text-white text-xs font-bold">Q{current + 1}</span>
-          {q.type === "multi" && <span className="px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold">Choose {q.count}</span>}
-          {q.type === "tf" && <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 text-xs font-semibold">True / False</span>}
-          {q.type === "order" && <span className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-700 text-xs font-semibold">Chronological order</span>}
+          <span className="px-2.5 py-1 rounded-lg bg-[#0047FF] text-white text-xs font-bold">В{current + 1}</span>
+          {q.type === "multi" && <span className="px-2.5 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-semibold">Выберите {q.count}</span>}
+          {q.type === "tf" && <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 text-xs font-semibold">Правда/Ложь</span>}
+          {q.type === "order" && <span className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-700 text-xs font-semibold">Хронол. порядок</span>}
         </div>
         <p className="text-[15px] font-semibold text-[#0A0A0A] leading-relaxed mb-5">{q.question}</p>
 
         {/* options */}
         {q.type === "order" ? (
           <div className="bg-[#F5F3EE] rounded-xl p-4 space-y-2">
-            <div className="text-sm font-semibold text-[#0047FF] mb-2">Correct chronological order:</div>
+            <div className="text-sm font-semibold text-[#0047FF] mb-2">Правильный хронологический порядок:</div>
             {q.items.map(it => (
               <div key={it.order} className="flex items-center gap-3 py-1.5">
                 <span className="w-6 h-6 rounded-md bg-[#0047FF]/10 text-[#0047FF] text-xs font-bold flex items-center justify-center shrink-0">{it.order}</span>
@@ -308,7 +308,7 @@ function Quiz({ questions, mode, onFinish }: {
           </div>
         ) : q.type === "tf" ? (
           <div className="grid grid-cols-2 gap-3">
-            {["✓ True", "✗ False"].map((label, idx) => (
+            {["✓ Верно", "✗ Неверно"].map((label, idx) => (
               <button key={idx} onClick={() => !isChecked && select(idx)}
                 className={`py-4 rounded-xl border-2 text-sm font-semibold transition-all ${optClass(idx)} ${isChecked ? "cursor-default" : "cursor-pointer"}`}>
                 {label}
@@ -318,7 +318,7 @@ function Quiz({ questions, mode, onFinish }: {
         ) : (
           <div className="space-y-2.5">
             {q.options.map((opt, idx) => {
-              const letters = "ABCDE";
+              const letters = "АБВГД";
               return (
                 <button key={idx} onClick={() => !isChecked && select(idx)}
                   className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${optClass(idx)} ${isChecked ? "cursor-default" : "cursor-pointer"}`}>
@@ -335,12 +335,12 @@ function Quiz({ questions, mode, onFinish }: {
         {/* feedback */}
         {isChecked && q.type !== "order" && (
           <div className={`mt-4 px-4 py-3 rounded-xl text-sm font-medium ${isCorrect ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
-            {isCorrect ? "✓ Correct!" : `✗ Wrong. Correct: ${(q.type === "tf" ? ["True", "False"] : q.options).filter((_, i) => q.correct.includes(i)).join(", ")}`}
+            {isCorrect ? "✓ Верно!" : `✗ Неверно. Правильно: ${(q.type === "tf" ? ["Верно", "Неверно"] : q.options).filter((_, i) => q.correct.includes(i)).join(", ")}`}
           </div>
         )}
         {q.type === "order" && (
           <div className="mt-4 px-4 py-3 rounded-xl text-sm font-medium bg-blue-50 border border-blue-200 text-blue-700">
-            ℹ️ Memorize this chronological order for the exam.
+            ℹ️ Запомните этот хронологический порядок.
           </div>
         )}
       </div>
@@ -349,24 +349,24 @@ function Quiz({ questions, mode, onFinish }: {
       <div className="flex items-center justify-between">
         <button onClick={prev} disabled={current === 0}
           className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#E8E5DF] text-sm text-[#6B6B6B] hover:bg-[#F0EEE9] transition-colors disabled:opacity-40">
-          <ChevronLeft className="w-4 h-4" /> Prev
+          <ChevronLeft className="w-4 h-4" /> Назад
         </button>
         {mode === "instant" ? (
           isChecked || q.type === "order" ? (
             <button onClick={next}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#0047FF] text-white text-sm font-medium hover:bg-[#0038CC] transition-colors">
-              {current === total - 1 ? "See Results 🎯" : <>Next <ChevronRight className="w-4 h-4" /></>}
+              {current === total - 1 ? "Результаты 🎯" : <>Далее <ChevronRight className="w-4 h-4" /></>}
             </button>
           ) : (
             <button onClick={check} disabled={!userAns.length}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#0047FF]/80 text-white text-sm font-medium hover:bg-[#0047FF] transition-colors disabled:opacity-40">
-              Check
+              Проверить
             </button>
           )
         ) : (
           <button onClick={next}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#0047FF] text-white text-sm font-medium hover:bg-[#0038CC] transition-colors">
-            {current === total - 1 ? "Back to start ↑" : <>Next <ChevronRight className="w-4 h-4" /></>}
+            {current === total - 1 ? "К началу ↑" : <>Далее <ChevronRight className="w-4 h-4" /></>}
           </button>
         )}
       </div>
@@ -419,7 +419,7 @@ export function TestTakingPage() {
           <XCircle className="w-12 h-12 text-red-400 mx-auto" />
           <p className="text-[#6B6B6B]">{error || "Тест не найден"}</p>
           <Link to="/study" className="inline-flex items-center gap-2 text-sm text-[#0047FF] hover:underline">
-            <ArrowLeft className="w-4 h-4" /> Back to tests
+            <ArrowLeft className="w-4 h-4" /> К тестам
           </Link>
         </div>
       </div>
@@ -432,7 +432,7 @@ export function TestTakingPage() {
         {/* breadcrumb */}
         <div className="mb-6">
           <Link to="/study" className="inline-flex items-center gap-1.5 text-sm text-[#6B6B6B] hover:text-[#0047FF] transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to tests
+            <ArrowLeft className="w-4 h-4" /> К тестам
           </Link>
         </div>
 
@@ -440,11 +440,11 @@ export function TestTakingPage() {
         <div className="mb-6">
           <div className="flex items-center gap-2 text-[#8A8A8A] text-sm mb-2">
             <BookOpen className="w-4 h-4" />
-            <span>Создание тестов</span>
+            <span>Тесты</span>
           </div>
           <h1 className="text-2xl font-bold text-[#0A0A0A]">{test.title}</h1>
           {test.description && <p className="text-[#6B6B6B] text-sm mt-1">{test.description}</p>}
-          {test.instructor_name && <p className="text-xs text-[#8A8A8A] mt-1">by {test.instructor_name}</p>}
+          {test.instructor_name && <p className="text-xs text-[#8A8A8A] mt-1">Автор: {test.instructor_name}</p>}
         </div>
 
         {!config ? (

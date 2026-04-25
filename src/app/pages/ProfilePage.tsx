@@ -381,7 +381,7 @@ export function ProfilePage() {
                 <motion.div key={course.id} initial={{ y: 10 }} animate={{ y: 0 }}
                   className="bg-[#F5F3EE] border border-[#E8E5DF] rounded-2xl overflow-hidden hover:border-white/[0.12] transition-all">
                   <div className="flex gap-4 p-4">
-                    <div className="w-20 h-16 rounded-xl overflow-hidden bg-gradient-to-br [#F0EEE9] shrink-0">
+                    <div className="w-20 h-16 rounded-xl overflow-hidden bg-[#F0EEE9] shrink-0">
                       {course.image
                         ? <img src={course.image} alt={course.title} className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-6 h-6 text-blue-400/30" /></div>

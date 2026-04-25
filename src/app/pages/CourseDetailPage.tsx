@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { LEVEL_CONFIG } from "../lib/constants";
-import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   BookOpen, Clock, Users, ArrowLeft, CheckCircle2,
@@ -59,8 +59,8 @@ function Stars({ rating, size = "w-4 h-4" }: { rating: number; size?: string }) 
 export function CourseDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
+  const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || 'https://aziral.com';
 
   const [course, setCourse]         = useState<Course | null>(null);
   const [related, setRelated]       = useState<RelatedCourse[]>([]);
@@ -105,7 +105,11 @@ export function CourseDetailPage() {
   }, [id]);
 
   const handleEnroll = async () => {
-    if (!user) { navigate("/login", { state: { from: location.pathname } }); return; }
+    if (!user) {
+      const returnTo = encodeURIComponent(`${window.location.origin}${location.pathname}`);
+      window.location.href = `${MAIN_SITE}/login?redirect=${returnTo}`;
+      return;
+    }
     if (enrollingRef.current) return;
     enrollingRef.current = true;
     setEnrolling(true); setEnrollError("");
@@ -379,7 +383,7 @@ export function CourseDetailPage() {
                 <GraduationCap className="w-5 h-5 text-[#0047FF]" /> Об инструкторе
               </h2>
               <div className="flex items-start gap-4">
-                <div className="w-16 h-16 bg-gradient-to-br [#0047FF] rounded-2xl flex items-center justify-center text-[#0A0A0A] text-2xl font-bold shrink-0 shadow-lg shadow-black/10">
+                <div className="w-16 h-16 bg-gradient-to-br from-[#0047FF] to-[#0038CC] rounded-2xl flex items-center justify-center text-white text-2xl font-bold shrink-0 shadow-lg shadow-black/10">
                   {course.instructor_name?.[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1">

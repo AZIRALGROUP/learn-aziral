@@ -342,7 +342,7 @@ export function CourseLearningPage() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)}>
               <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
-                className="absolute left-0 top-14 bottom-0 w-72 bg-[#1a1a2e] border-r border-[#E8E5DF]"
+                className="absolute left-0 top-14 bottom-0 w-72 bg-[#F5F3EE] border-r border-[#E8E5DF]"
                 onClick={e => e.stopPropagation()}>
                 <CourseSidebar {...sidebarProps} />
               </motion.aside>
