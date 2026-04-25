@@ -785,7 +785,7 @@ export function CoursesPage() {
             <div className="ml-auto flex items-center gap-3">
               {fetching && (
                 <span className="flex items-center gap-1.5 text-xs text-[#0047FF]">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Поиск...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("courses.searching")}
                 </span>
               )}
               {!loading && !fetching && courses.length > 0 && (

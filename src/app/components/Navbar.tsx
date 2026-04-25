@@ -35,7 +35,7 @@ export function Navbar() {
 
   const navLinks = [
     { label: "Каталог",         href: "/",          external: false },
-    { label: "Создание тестов", href: "/study",      external: false },
+    { label: "Тесты",           href: "/study",      external: false },
     {
       label: "Инструкторам",
       href: isInstructor ? "/instructor" : `${MAIN_SITE}/instructor`,

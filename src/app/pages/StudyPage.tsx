@@ -52,7 +52,7 @@ function SkeletonCard() {
    StudyPage
 ───────────────────────────────────────────────────────── */
 export function StudyPage() {
-  usePageTitle("Создание тестов — AZIRAL Learn");
+  usePageTitle("Тесты — AZIRAL Learn");
 
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -116,7 +116,7 @@ export function StudyPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[#1A1A1A] tracking-tight">
-              Создание тестов
+              Тесты
             </h1>
             <p className="text-[#6B6B6B] mt-1 text-sm sm:text-base">
               Проверьте свои знания с помощью интерактивных тестов

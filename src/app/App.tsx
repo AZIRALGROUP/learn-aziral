@@ -14,6 +14,8 @@ const ProfilePage        = lazy(() => import('./pages/ProfilePage').then(m => ({
 const StudyPage          = lazy(() => import('./pages/StudyPage').then(m => ({ default: m.StudyPage })));
 const TestTakingPage     = lazy(() => import('./pages/TestTakingPage').then(m => ({ default: m.TestTakingPage })));
 const TestBuilderPage    = lazy(() => import('./pages/TestBuilderPage').then(m => ({ default: m.TestBuilderPage })));
+const LoginPage          = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const RegisterPage       = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
 
 const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || 'https://aziral.com';
 
@@ -72,6 +74,8 @@ function AppRoutes() {
           <Route path="/study"                           element={<StudyPage />} />
           <Route path="/study/:id"                      element={<TestTakingPage />} />
           <Route path="/instructor/tests/:id/build"     element={<ProtectedRoute requireRole="instructor"><TestBuilderPage /></ProtectedRoute>} />
+          <Route path="/login"                          element={<LoginPage />} />
+          <Route path="/register"                       element={<RegisterPage />} />
         </Routes>
       </Suspense>
     </>

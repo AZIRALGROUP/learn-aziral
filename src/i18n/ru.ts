@@ -298,6 +298,7 @@ export const ru = {
     sort_price_desc: "Дороже",
     sort_rating: "По рейтингу",
     sort_new: "Новые",
+    searching: "Поиск...",
     reset: "Сброс",
     error_loading: "Ошибка загрузки",
     retry: "Попробовать снова",

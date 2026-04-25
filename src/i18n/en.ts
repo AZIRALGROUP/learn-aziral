@@ -298,6 +298,7 @@ export const en = {
     sort_price_desc: "Most expensive",
     sort_rating: "Top rated",
     sort_new: "Newest",
+    searching: "Searching...",
     reset: "Reset",
     error_loading: "Loading error",
     retry: "Try again",

@@ -298,6 +298,7 @@ export const kz = {
     sort_price_desc: "Қымбат",
     sort_rating: "Рейтинг бойынша",
     sort_new: "Жаңа",
+    searching: "Іздеу...",
     reset: "Тазалау",
     error_loading: "Жүктеу қатесі",
     retry: "Қайталап көру",
