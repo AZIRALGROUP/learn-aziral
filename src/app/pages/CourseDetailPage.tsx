@@ -90,7 +90,7 @@ export function CourseDetailPage() {
         setCourse(data);
         setEnrolled(!!data.enrolled);
         const [r2, r3] = await Promise.all([
-          fetch(`/api/courses?category=${data.category}`),
+          fetch(`/api/courses?category=${data.category}`, { credentials: 'include' }),
           fetch(`/api/courses/${id}/rating`, { credentials: 'include' }),
         ]);
         if (r2.ok) {

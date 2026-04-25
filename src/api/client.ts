@@ -67,7 +67,7 @@ export const lessonsApi = {
 export const enrollmentsApi = {
   mine: () => request<object[]>('/my-enrollments'),
   myCourses: () => request<object[]>('/profile/courses'),
-  myXp: () => request<{ total_xp: number }>('/profile/xp'),
+  myXp: () => request<{ xp: number }>('/profile/xp'),
 };
 
 // ── Instructor ────────────────────────────────────────────────────────────────

@@ -124,7 +124,7 @@ export function ProfilePage() {
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      fetch("/api/profile/notifications", creds).then(r => r.json()),
+      fetch("/api/profile/notifications", creds).then(r => r.ok ? r.json() : []),
       fetch("/api/profile/courses", creds).then(r => r.ok ? r.json() : []).then(setMyCourses),
       fetch("/api/profile/xp", creds).then(r => r.ok ? r.json() : { xp: 0 }).then(d => setUserXp(d.xp)),
       fetch("/api/instructor/apply", creds).then(r => r.ok ? r.json() : null).then(setInstructorApp),
@@ -132,7 +132,7 @@ export function ProfilePage() {
       const notifs: Notification[] = Array.isArray(n) ? n : [];
       setNotifications(notifs);
       setUnreadCount(notifs.filter(x => !x.read).length);
-    }).finally(() => setLoading(false));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [user]);
 
   const markRead = async (id: number) => {
