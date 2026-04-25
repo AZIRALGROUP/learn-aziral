@@ -3,6 +3,7 @@ import { useEffect, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
 import { Navbar } from './components/Navbar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const CoursesPage        = lazy(() => import('./pages/CoursesPage').then(m => ({ default: m.CoursesPage })));
 const CourseDetailPage   = lazy(() => import('./pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
@@ -79,11 +80,13 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-        <Toaster position="bottom-right" theme="dark" richColors />
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+          <Toaster position="bottom-right" theme="dark" richColors />
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

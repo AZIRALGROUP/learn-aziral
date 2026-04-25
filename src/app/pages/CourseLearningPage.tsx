@@ -22,6 +22,72 @@ type LessonDetail = {
   quizzes: Quiz[];
 };
 
+/* ─────────────────────────────────────────────────────────
+   Sidebar — defined at module level so React never recreates the
+   component type on re-renders (defining components inside render
+   causes unnecessary unmount/remount cycles).
+───────────────────────────────────────────────────────── */
+type SidebarProps = {
+  courseId: string;
+  lessons: Lesson[];
+  current: LessonDetail | null;
+  progress: number;
+  onSelect: (id: number) => void;
+};
+
+function CourseSidebar({ courseId, lessons, current, progress, onSelect }: SidebarProps) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="p-4 border-b border-[#E8E5DF]">
+        <Link to={`/courses/${courseId}`} className="flex items-center gap-2 text-[#6B6B6B] hover:text-[#0A0A0A] text-xs transition-colors mb-3">
+          <ArrowLeft className="w-3.5 h-3.5" /> К курсу
+        </Link>
+        <p className="text-[#0A0A0A] font-medium text-sm leading-snug line-clamp-2">{current?.course_title}</p>
+        <div className="mt-3">
+          <div className="flex justify-between text-xs text-[#6B6B6B] mb-1">
+            <span>Прогресс</span>
+            <span>{lessons.filter(l => l.completed).length}/{lessons.length}</span>
+          </div>
+          <div className="h-1.5 bg-[#F5F3EE] rounded-full">
+            <div className="h-1.5 bg-[#0047FF] rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2">
+        {lessons.map((lesson, i) => {
+          const isActive = current?.id === lesson.id;
+          const isLocked = i > 0 && !lessons[i - 1].completed && !lesson.completed;
+          return (
+            <button key={lesson.id} onClick={() => !isLocked && onSelect(lesson.id)} disabled={isLocked}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 mb-1 ${
+                isActive ? 'bg-[#0047FF]/10 border border-[#0047FF]/30' :
+                isLocked ? 'opacity-40 cursor-not-allowed' :
+                'hover:bg-[#F0EEE9] border border-transparent'
+              }`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs ${
+                lesson.completed ? 'bg-green-500 text-white' :
+                isActive ? 'bg-[#0047FF] text-white' :
+                'bg-[#EDEAE4] text-[#6B6B6B]'
+              }`}>
+                {lesson.completed ? <CheckCircle2 className="w-4 h-4" /> : isLocked ? <Lock className="w-3 h-3" /> : <span>{i + 1}</span>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm leading-snug line-clamp-2 ${isActive ? 'text-[#0047FF]' : lesson.completed ? 'text-[#6B6B6B]' : 'text-[#3A3A3A]'}`}>
+                  {lesson.title}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[#A0A0A0] text-xs">+{lesson.xp_reward} XP</span>
+                  {lesson.quiz_count > 0 && <span className="text-[#A0A0A0] text-xs">· {lesson.quiz_count} вопр.</span>}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Safely parse **bold** and `code` inline markers into React elements
 function parseInline(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
@@ -94,85 +160,117 @@ export function CourseLearningPage() {
   const [xpGained, setXpGained] = useState(0);
   const [totalXp, setTotalXp] = useState(0);
   const [showXpPop, setShowXpPop] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Quiz state
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [quizResult, setQuizResult] = useState<any>(null);
   const [submittingQuiz, setSubmittingQuiz] = useState(false);
+  const [quizError, setQuizError] = useState<string | null>(null);
   const [showQuiz, setShowQuiz] = useState(false);
   const [lessonError, setLessonError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadLessons();
-    loadXp();
-  }, [id]);
-
-  const loadLessons = async () => {
-    const r = await fetch(`/api/courses/${id}/lessons`, { credentials: 'include' });
-    if (r.ok) {
-      const data: Lesson[] = await r.json();
-      setLessons(data);
-      // Auto-navigate to first incomplete or first lesson
-      const targetId = lessonId || data.find(l => !l.completed)?.id || data[0]?.id;
-      if (targetId) loadLesson(Number(targetId));
-    }
-  };
-
-  const loadXp = async () => {
-    const r = await fetch('/api/profile/xp', { credentials: 'include' });
-    if (r.ok) { const d = await r.json(); setTotalXp(d.xp); }
-  };
-
   const loadLesson = async (lId: number) => {
     setLoadingLesson(true); setQuizResult(null); setAnswers({}); setShowQuiz(false); setCompleted(false); setLessonError(null);
-    const r = await fetch(`/api/lessons/${lId}`, { credentials: 'include' });
-    if (r.ok) {
-      const data: LessonDetail = await r.json();
-      setCurrent(data);
-      setCompleted(!!data.completed);
-      if (data.completed) setShowQuiz(true);
-    } else {
-      const err = await r.json().catch(() => ({}));
-      setLessonError(err.error || "Не удалось загрузить урок");
+    try {
+      const r = await fetch(`/api/lessons/${lId}`, { credentials: 'include' });
+      if (r.ok) {
+        const data: LessonDetail = await r.json();
+        setCurrent(data);
+        setCompleted(!!data.completed);
+        if (data.completed) setShowQuiz(true);
+      } else {
+        const err = await r.json().catch(() => ({}));
+        setLessonError((err as { error?: string }).error || "Не удалось загрузить урок");
+      }
+    } catch {
+      setLessonError("Ошибка сети — проверьте подключение");
+    } finally {
+      setLoadingLesson(false);
+      setSidebarOpen(false);
+      window.scrollTo(0, 0);
     }
-    setLoadingLesson(false);
-    setSidebarOpen(false);
-    window.scrollTo(0, 0);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = async () => {
+      setLoadError(null);
+      try {
+        const r = await fetch(`/api/courses/${id}/lessons`, { credentials: 'include' });
+        if (!r.ok) { setLoadError("Не удалось загрузить уроки курса"); return; }
+        const data: Lesson[] = await r.json();
+        if (cancelled) return;
+        setLessons(data);
+        const targetId = lessonId ? Number(lessonId) : data.find(l => !l.completed)?.id ?? data[0]?.id;
+        if (targetId) loadLesson(targetId);
+      } catch {
+        if (!cancelled) setLoadError("Ошибка сети — проверьте подключение");
+      }
+    };
+
+    const loadXp = async () => {
+      try {
+        const r = await fetch('/api/profile/xp', { credentials: 'include' });
+        if (r.ok) { const d = await r.json(); if (!cancelled) setTotalXp(d.xp); }
+      } catch { /* XP is non-critical, skip silently */ }
+    };
+
+    init();
+    loadXp();
+    return () => { cancelled = true; };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = async () => {
     if (!current || completing) return;
     setCompleting(true);
-    const r = await fetch(`/api/lessons/${current.id}/complete`, { method: 'POST', credentials: 'include' });
-    if (r.ok) {
-      const d = await r.json();
-      setCompleted(true);
-      setShowQuiz(true);
-      if (d.xp > 0) {
-        setXpGained(d.xp); setTotalXp(p => p + d.xp);
-        setShowXpPop(true); setTimeout(() => setShowXpPop(false), 2500);
+    try {
+      const r = await fetch(`/api/lessons/${current.id}/complete`, { method: 'POST', credentials: 'include' });
+      if (r.ok) {
+        const d = await r.json();
+        setCompleted(true);
+        setShowQuiz(true);
+        if (d.xp > 0) {
+          setXpGained(d.xp); setTotalXp(p => p + d.xp);
+          setShowXpPop(true); setTimeout(() => setShowXpPop(false), 2500);
+        }
+        setLessons(prev => prev.map(l => l.id === current.id ? { ...l, completed: 1 } : l));
+      } else {
+        const err = await r.json().catch(() => ({}));
+        setLessonError((err as { error?: string }).error || "Не удалось отметить урок — попробуйте ещё раз");
       }
-      setLessons(prev => prev.map(l => l.id === current.id ? { ...l, completed: 1 } : l));
+    } catch {
+      setLessonError("Ошибка сети — не удалось сохранить прогресс");
+    } finally {
+      setCompleting(false);
     }
-    setCompleting(false);
   };
 
   const handleSubmitQuiz = async () => {
     if (!current || Object.keys(answers).length === 0) return;
     setSubmittingQuiz(true);
-    const r = await fetch(`/api/lessons/${current.id}/quiz/submit`, {
-      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers }),
-    });
-    if (r.ok) {
-      const d = await r.json();
-      setQuizResult(d);
-      if (d.totalXp > 0) {
-        setTotalXp(p => p + d.totalXp);
-        setXpGained(d.totalXp); setShowXpPop(true); setTimeout(() => setShowXpPop(false), 2500);
+    setQuizError(null);
+    try {
+      const r = await fetch(`/api/lessons/${current.id}/quiz/submit`, {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setQuizResult(d);
+        if (d.totalXp > 0) {
+          setTotalXp(p => p + d.totalXp);
+          setXpGained(d.totalXp); setShowXpPop(true); setTimeout(() => setShowXpPop(false), 2500);
+        }
+      } else {
+        setQuizError("Не удалось проверить ответы — попробуйте ещё раз");
       }
+    } catch {
+      setQuizError("Ошибка сети — попробуйте ещё раз");
+    } finally {
+      setSubmittingQuiz(false);
     }
-    setSubmittingQuiz(false);
   };
 
   usePageTitle(current ? `${current.course_title} — ${current.title}` : "Обучение");
@@ -181,56 +279,18 @@ export function CourseLearningPage() {
   const prevLesson = lessons[currentIndex - 1];
   const progress = lessons.length ? Math.round(lessons.filter(l => l.completed).length / lessons.length * 100) : 0;
 
-  const Sidebar = () => (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-[#E8E5DF]">
-        <Link to={`/courses/${id}`} className="flex items-center gap-2 text-[#6B6B6B] hover:text-[#0A0A0A] text-xs transition-colors mb-3">
-          <ArrowLeft className="w-3.5 h-3.5" /> К курсу
-        </Link>
-        <p className="text-[#0A0A0A] font-medium text-sm leading-snug line-clamp-2">{current?.course_title}</p>
-        <div className="mt-3">
-          <div className="flex justify-between text-xs text-[#6B6B6B] mb-1">
-            <span>Прогресс</span>
-            <span>{lessons.filter(l => l.completed).length}/{lessons.length}</span>
-          </div>
-          <div className="h-1.5 bg-[#F5F3EE] rounded-full">
-            <div className="h-1.5 bg-[#0047FF] rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto p-2">
-        {lessons.map((lesson, i) => {
-          const isActive = current?.id === lesson.id;
-          const isLocked = i > 0 && !lessons[i - 1].completed && !lesson.completed;
-          return (
-            <button key={lesson.id} onClick={() => !isLocked && loadLesson(lesson.id)} disabled={isLocked}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 mb-1 ${
-                isActive ? 'bg-[#0047FF]/10 border border-[#0047FF]/30' :
-                isLocked ? 'opacity-40 cursor-not-allowed' :
-                'hover:bg-[#F0EEE9] border border-transparent'
-              }`}>
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs ${
-                lesson.completed ? 'bg-green-500 text-white' :
-                isActive ? 'bg-[#0047FF] text-white' :
-                'bg-[#EDEAE4] text-[#6B6B6B]'
-              }`}>
-                {lesson.completed ? <CheckCircle2 className="w-4 h-4" /> : isLocked ? <Lock className="w-3 h-3" /> : <span>{i + 1}</span>}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm leading-snug line-clamp-2 ${isActive ? 'text-white' : lesson.completed ? 'text-[#6B6B6B]' : 'text-[#3A3A3A]'}`}>
-                  {lesson.title}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[#A0A0A0] text-xs">+{lesson.xp_reward} XP</span>
-                  {lesson.quiz_count > 0 && <span className="text-[#A0A0A0] text-xs">· {lesson.quiz_count} вопр.</span>}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+  if (loadError) return (
+    <div className="min-h-screen bg-[#F5F3EE] flex flex-col items-center justify-center gap-4 pt-24">
+      <AlertCircle className="w-10 h-10 text-red-400" />
+      <p className="text-[#0A0A0A] text-lg">{loadError}</p>
+      <Link to={`/courses/${id}`}
+        className="flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white rounded-xl text-sm transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Вернуться к курсу
+      </Link>
     </div>
   );
+
+  const sidebarProps: SidebarProps = { courseId: id!, lessons, current, progress, onSelect: loadLesson };
 
   return (
     <div className="min-h-screen bg-[#F5F3EE] flex flex-col">
@@ -273,7 +333,7 @@ export function CourseLearningPage() {
       <div className="flex flex-1 pt-14">
         {/* Sidebar desktop */}
         <aside className="hidden lg:flex flex-col w-72 border-r border-[#E8E5DF] fixed left-0 top-14 bottom-0 bg-[#F5F3EE]">
-          <Sidebar />
+          <CourseSidebar {...sidebarProps} />
         </aside>
 
         {/* Sidebar mobile overlay */}
@@ -284,7 +344,7 @@ export function CourseLearningPage() {
               <motion.aside initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
                 className="absolute left-0 top-14 bottom-0 w-72 bg-[#1a1a2e] border-r border-[#E8E5DF]"
                 onClick={e => e.stopPropagation()}>
-                <Sidebar />
+                <CourseSidebar {...sidebarProps} />
               </motion.aside>
             </motion.div>
           )}
@@ -394,6 +454,11 @@ export function CourseLearningPage() {
                             );
                           })}
 
+                          {quizError && (
+                            <p className="flex items-center gap-1.5 text-red-400 text-sm px-1">
+                              <AlertCircle className="w-4 h-4 shrink-0" /> {quizError}
+                            </p>
+                          )}
                           {!quizResult && !current.quizzes.every(q => q.passed > 0) && (
                             <button onClick={handleSubmitQuiz} disabled={submittingQuiz || Object.keys(answers).length < current.quizzes.length}
                               className="flex items-center gap-2 px-5 py-3 bg-[#0047FF] hover:bg-[#0038CC] disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-all">

@@ -276,18 +276,14 @@ export function CoursesPage() {
     return t("courses.courses_many");
   };
 
-  /* ── Platform stats (once on mount, no filters) ── */
-  useEffect(() => {
-    const token = localStorage.getItem("azr-token");
-    fetch("/api/courses", { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Course[]) => setPlatformStats({
-        total:    data.length,
-        free:     data.filter(c => c.price === 0).length,
-        students: data.reduce((s, c) => s + c.students_count, 0),
-      }))
-      .catch(() => {});
-  }, []);
+  /* ── Platform stats — derived from the first full fetch ── */
+  const updateStats = (data: Course[]) => {
+    setPlatformStats({
+      total:    data.length,
+      free:     data.filter(c => c.price === 0).length,
+      students: data.reduce((s, c) => s + c.students_count, 0),
+    });
+  };
 
   /* ── Debounce search ── */
   useEffect(() => {
@@ -300,23 +296,24 @@ export function CoursesPage() {
     isFirst ? setLoading(true) : setFetching(true);
     setError("");
     try {
-      const p = new URLSearchParams();
-      if (category !== "all") p.set("category", category);
-      if (level !== "all")    p.set("level", level);
-      if (onlyFree)           p.set("free", "1");
-      if (search)             p.set("search", search);
-      const token = localStorage.getItem("azr-token");
-      const r = await fetch(`/api/courses?${p}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const p: Record<string, string> = {};
+      if (category !== "all") p.category = category;
+      if (level !== "all")    p.level    = level;
+      if (onlyFree)           p.free     = "1";
+      if (search)             p.search   = search;
+      const r = await fetch(`/api/courses?${new URLSearchParams(p)}`, {
+        credentials: "include",
       });
       if (!r.ok) throw new Error();
-      setAllCourses(await r.json());
+      const data: Course[] = await r.json();
+      setAllCourses(data);
+      if (isFirst) updateStats(data);
     } catch {
       setError(t("courses.error_loading"));
     } finally {
       isFirst ? setLoading(false) : setFetching(false);
     }
-  }, [category, level, onlyFree, search, t]);
+  }, [category, level, onlyFree, search, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // First load
   useEffect(() => { fetchCourses(true); }, []); // eslint-disable-line

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   User, Clock, CheckCircle2, AlertCircle, XCircle,
@@ -28,7 +28,6 @@ const NOTIF_ICONS: Record<string, { color: string; icon: typeof AlertCircle }> =
 export function ProfilePage() {
   usePageTitle("Личный кабинет — AZIRAL");
   const { user, logout, refetch } = useAuth();
-  const navigate = useNavigate();
   const { t } = useTranslation();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -216,7 +215,7 @@ export function ProfilePage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => { logout(); navigate("/"); }} className="flex items-center gap-2 px-4 py-2.5 bg-[#F5F3EE] border border-[#E8E5DF] rounded-xl text-[#6B6B6B] hover:text-[#0A0A0A] text-sm transition-colors">
+            <button onClick={logout} className="flex items-center gap-2 px-4 py-2.5 bg-[#F5F3EE] border border-[#E8E5DF] rounded-xl text-[#6B6B6B] hover:text-[#0A0A0A] text-sm transition-colors">
               <LogOut className="w-4 h-4" /> {t("nav.logout")}
             </button>
           </div>

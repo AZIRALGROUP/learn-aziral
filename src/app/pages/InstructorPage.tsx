@@ -64,54 +64,67 @@ export function InstructorPage() {
   const [applyForm, setApplyForm]         = useState({ bio: "", experience: "", team_name: "" });
 
   const isInstructor = user?.role === "instructor";
-  const h = {};
+  const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
   useEffect(() => {
     if (!user) return;
     if (isInstructor) loadData();
     else checkApply();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     setLoading(true);
-    const [cRes, eRes] = await Promise.all([
-      fetch("/api/instructor/courses", { credentials: 'include', headers: h }),
-      fetch("/api/instructor/earnings", { credentials: 'include', headers: h }),
-    ]);
-    if (cRes.ok) setCourses(await cRes.json());
-    if (eRes.ok) setEarnings(await eRes.json());
-    setLoading(false);
+    try {
+      const [cRes, eRes] = await Promise.all([
+        fetch("/api/instructor/courses", { credentials: 'include' }),
+        fetch("/api/instructor/earnings", { credentials: 'include' }),
+      ]);
+      if (cRes.ok) setCourses(await cRes.json());
+      if (eRes.ok) setEarnings(await eRes.json());
+    } finally {
+      setLoading(false);
+    }
   };
 
   const checkApply = async () => {
     setApplyLoading(true);
-    const r = await fetch("/api/instructor/apply", { credentials: 'include', headers: h }).catch(() => null);
-    if (r?.ok) {
-      const d = await r.json();
-      setApplyStatus(d?.status || null);
-      setPaymentStatus(d?.payment_status || null);
+    try {
+      const r = await fetch("/api/instructor/apply", { credentials: 'include' });
+      if (r.ok) {
+        const d = await r.json();
+        setApplyStatus(d?.status || null);
+        setPaymentStatus(d?.payment_status || null);
+      }
+    } finally {
+      setApplyLoading(false);
     }
-    setApplyLoading(false);
   };
 
   const handleApply = async () => {
     setApplying(true);
-    const r = await fetch("/api/instructor/apply", {
-      method: "POST", credentials: 'include', headers: h, body: JSON.stringify(applyForm),
-    }).catch(() => null);
-    if (r?.ok) {
-      const d = await r.json();
-      setApplyStatus(d.status);
-      setPaymentStatus(d.payment_status);
+    try {
+      const r = await fetch("/api/instructor/apply", {
+        method: "POST", credentials: 'include',
+        headers: JSON_HEADERS, body: JSON.stringify(applyForm),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setApplyStatus(d.status);
+        setPaymentStatus(d.payment_status);
+      }
+    } finally {
+      setApplying(false);
     }
-    setApplying(false);
   };
 
   const handlePaymentSent = async () => {
     setConfirmingPayment(true);
-    const r = await fetch("/api/instructor/apply/payment", { method: "POST", credentials: 'include', headers: h }).catch(() => null);
-    if (r?.ok) setPaymentStatus("sent");
-    setConfirmingPayment(false);
+    try {
+      const r = await fetch("/api/instructor/apply/payment", { method: "POST", credentials: 'include' });
+      if (r.ok) setPaymentStatus("sent");
+    } finally {
+      setConfirmingPayment(false);
+    }
   };
 
   const copyKaspi = () => {
@@ -136,20 +149,36 @@ export function InstructorPage() {
   const handleSave = async () => {
     if (!form.title.trim()) { setFormError("Введите название курса"); return; }
     setSaving(true); setFormError("");
-    const content = JSON.stringify(programItems.filter(Boolean));
-    const body = { ...form, price: Number(form.price), content };
-    const url = modal === "edit" ? `/api/courses/${editId}` : "/api/courses";
-    const method = modal === "edit" ? "PATCH" : "POST";
-    const r = await fetch(url, { method, credentials: 'include', headers: h, body: JSON.stringify(body) }).catch(() => null);
-    if (r?.ok) { setModal(null); loadData(); }
-    else { const d = await r?.json().catch(() => ({})); setFormError(d?.error || "Ошибка сохранения"); }
-    setSaving(false);
+    try {
+      const content = JSON.stringify(programItems.filter(Boolean));
+      const body = { ...form, price: Number(form.price), content };
+      const url = modal === "edit" ? `/api/courses/${editId}` : "/api/courses";
+      const method = modal === "edit" ? "PATCH" : "POST";
+      const r = await fetch(url, { method, credentials: 'include', headers: JSON_HEADERS, body: JSON.stringify(body) });
+      if (r.ok) { setModal(null); loadData(); }
+      else { const d = await r.json().catch(() => ({})); setFormError((d as { error?: string }).error || "Ошибка сохранения"); }
+    } catch {
+      setFormError("Ошибка сети — попробуйте ещё раз");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
     setDeleting(id);
-    await fetch(`/api/courses/${id}`, { method: "DELETE", credentials: 'include', headers: h }).catch(() => null);
-    setConfirmDel(null); setDeleting(null); loadData();
+    try {
+      const r = await fetch(`/api/courses/${id}`, { method: "DELETE", credentials: 'include' });
+      if (r.ok) {
+        setConfirmDel(null);
+        loadData();
+      } else {
+        setFormError("Не удалось удалить курс — попробуйте снова");
+      }
+    } catch {
+      setFormError("Ошибка сети при удалении");
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const addProgramItem = () => setProgramItems(p => [...p, ""]);
