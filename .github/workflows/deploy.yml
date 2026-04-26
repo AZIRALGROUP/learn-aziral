@@ -37,13 +37,17 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          envs: DEPLOY_TOKEN
           script: |
             cd /var/www/learn-aziral
+            git remote set-url origin https://x-access-token:${DEPLOY_TOKEN}@github.com/AZIRALGROUP/learn-aziral.git
             git fetch origin main
             git reset --hard origin/main
             docker compose up -d --build
