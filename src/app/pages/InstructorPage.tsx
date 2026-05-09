@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   GraduationCap, Plus, Pencil, Trash2, CheckCircle2, Clock, XCircle,
-  BookOpen, TrendingUp, Users, Loader2, X, AlertCircle, Eye,
+  BookOpen, TrendingUp, Users, Loader2, X, AlertCircle, Eye, EyeOff,
   ListChecks, Image as ImageIcon, ArrowRight,
-  CreditCard, Copy, CheckCheck, Banknote, ShieldCheck
+  CreditCard, Copy, CheckCheck, Banknote, ShieldCheck,
+  ClipboardList, Globe, Hash
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { testsApi } from "../../api/client";
+import type { TestSummary } from "../../api/client";
 
 type Course = {
   id: number; title: string; description: string; content: string;
@@ -63,68 +66,104 @@ export function InstructorPage() {
   const [copied, setCopied]               = useState(false);
   const [applyForm, setApplyForm]         = useState({ bio: "", experience: "", team_name: "" });
 
-  const isInstructor = user?.role === "instructor";
-  const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+  const location = useLocation();
+  const isInstructor = user?.role === "instructor" || user?.role === "admin";
+  const h = { "Content-Type": "application/json" };
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<"courses" | "tests">(
+    (location.state as any)?.tab === "tests" ? "tests" : "courses"
+  );
+
+  // Tests state
+  const [tests, setTests]               = useState<TestSummary[]>([]);
+  const [testsLoading, setTestsLoading] = useState(false);
+  const [deletingTest, setDeletingTest] = useState<number | null>(null);
+  const [confirmDelTest, setConfirmDelTest] = useState<number | null>(null);
+  const [togglingTest, setTogglingTest] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
     if (isInstructor) loadData();
     else checkApply();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    if (isInstructor && activeTab === "tests") loadTests();
+  }, [activeTab, isInstructor]);
 
   const loadData = async () => {
     setLoading(true);
+    const [cRes, eRes] = await Promise.all([
+      fetch("/api/instructor/courses", { credentials: 'include', headers: h }),
+      fetch("/api/instructor/earnings", { credentials: 'include', headers: h }),
+    ]);
+    if (cRes.ok) setCourses(await cRes.json());
+    if (eRes.ok) setEarnings(await eRes.json());
+    setLoading(false);
+  };
+
+  const loadTests = async () => {
+    setTestsLoading(true);
     try {
-      const [cRes, eRes] = await Promise.all([
-        fetch("/api/instructor/courses", { credentials: 'include' }),
-        fetch("/api/instructor/earnings", { credentials: 'include' }),
-      ]);
-      if (cRes.ok) setCourses(await cRes.json());
-      if (eRes.ok) setEarnings(await eRes.json());
-    } finally {
-      setLoading(false);
-    }
+      const data = await testsApi.myTests();
+      setTests(data);
+    } finally { setTestsLoading(false); }
+  };
+
+  const handleCreateTest = async () => {
+    try {
+      const test = await testsApi.create({ title: "Новый тест" });
+      window.location.href = `/instructor/tests/${test.id}/build`;
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteTest = async (id: number) => {
+    setDeletingTest(id);
+    try {
+      await testsApi.delete(id);
+      setTests(prev => prev.filter(t => t.id !== id));
+      setConfirmDelTest(null);
+    } finally { setDeletingTest(null); }
+  };
+
+  const handleToggleTestPublish = async (test: TestSummary) => {
+    setTogglingTest(test.id);
+    try {
+      const res = await testsApi.togglePublish(test.id);
+      setTests(prev => prev.map(t => t.id === test.id ? { ...t, status: res.status as any } : t));
+    } finally { setTogglingTest(null); }
   };
 
   const checkApply = async () => {
     setApplyLoading(true);
-    try {
-      const r = await fetch("/api/instructor/apply", { credentials: 'include' });
-      if (r.ok) {
-        const d = await r.json();
-        setApplyStatus(d?.status || null);
-        setPaymentStatus(d?.payment_status || null);
-      }
-    } finally {
-      setApplyLoading(false);
+    const r = await fetch("/api/instructor/apply", { credentials: 'include', headers: h }).catch(() => null);
+    if (r?.ok) {
+      const d = await r.json();
+      setApplyStatus(d?.status || null);
+      setPaymentStatus(d?.payment_status || null);
     }
+    setApplyLoading(false);
   };
 
   const handleApply = async () => {
     setApplying(true);
-    try {
-      const r = await fetch("/api/instructor/apply", {
-        method: "POST", credentials: 'include',
-        headers: JSON_HEADERS, body: JSON.stringify(applyForm),
-      });
-      if (r.ok) {
-        const d = await r.json();
-        setApplyStatus(d.status);
-        setPaymentStatus(d.payment_status);
-      }
-    } finally {
-      setApplying(false);
+    const r = await fetch("/api/instructor/apply", {
+      method: "POST", credentials: 'include', headers: h, body: JSON.stringify(applyForm),
+    }).catch(() => null);
+    if (r?.ok) {
+      const d = await r.json();
+      setApplyStatus(d.status);
+      setPaymentStatus(d.payment_status);
     }
+    setApplying(false);
   };
 
   const handlePaymentSent = async () => {
     setConfirmingPayment(true);
-    try {
-      const r = await fetch("/api/instructor/apply/payment", { method: "POST", credentials: 'include' });
-      if (r.ok) setPaymentStatus("sent");
-    } finally {
-      setConfirmingPayment(false);
-    }
+    const r = await fetch("/api/instructor/apply/payment", { method: "POST", credentials: 'include', headers: h }).catch(() => null);
+    if (r?.ok) setPaymentStatus("sent");
+    setConfirmingPayment(false);
   };
 
   const copyKaspi = () => {
@@ -149,36 +188,20 @@ export function InstructorPage() {
   const handleSave = async () => {
     if (!form.title.trim()) { setFormError("Введите название курса"); return; }
     setSaving(true); setFormError("");
-    try {
-      const content = JSON.stringify(programItems.filter(Boolean));
-      const body = { ...form, price: Number(form.price), content };
-      const url = modal === "edit" ? `/api/courses/${editId}` : "/api/courses";
-      const method = modal === "edit" ? "PATCH" : "POST";
-      const r = await fetch(url, { method, credentials: 'include', headers: JSON_HEADERS, body: JSON.stringify(body) });
-      if (r.ok) { setModal(null); loadData(); }
-      else { const d = await r.json().catch(() => ({})); setFormError((d as { error?: string }).error || "Ошибка сохранения"); }
-    } catch {
-      setFormError("Ошибка сети — попробуйте ещё раз");
-    } finally {
-      setSaving(false);
-    }
+    const content = JSON.stringify(programItems.filter(Boolean));
+    const body = { ...form, price: Number(form.price), content };
+    const url = modal === "edit" ? `/api/courses/${editId}` : "/api/courses";
+    const method = modal === "edit" ? "PATCH" : "POST";
+    const r = await fetch(url, { method, credentials: 'include', headers: h, body: JSON.stringify(body) }).catch(() => null);
+    if (r?.ok) { setModal(null); loadData(); }
+    else { const d = await r?.json().catch(() => ({})); setFormError(d?.error || "Ошибка сохранения"); }
+    setSaving(false);
   };
 
   const handleDelete = async (id: number) => {
     setDeleting(id);
-    try {
-      const r = await fetch(`/api/courses/${id}`, { method: "DELETE", credentials: 'include' });
-      if (r.ok) {
-        setConfirmDel(null);
-        loadData();
-      } else {
-        setFormError("Не удалось удалить курс — попробуйте снова");
-      }
-    } catch {
-      setFormError("Ошибка сети при удалении");
-    } finally {
-      setDeleting(null);
-    }
+    await fetch(`/api/courses/${id}`, { method: "DELETE", credentials: 'include', headers: h }).catch(() => null);
+    setConfirmDel(null); setDeleting(null); loadData();
   };
 
   const addProgramItem = () => setProgramItems(p => [...p, ""]);
@@ -299,7 +322,7 @@ export function InstructorPage() {
             </button>
           </motion.div>
 
-        ) : paymentStatus === "awaiting" ? (
+        ) : (paymentStatus === "awaiting" || (applyStatus && !paymentStatus)) ? (
           /* ── STEP 2: PAYMENT ── */
           <motion.div initial={{ y: 20 }} animate={{ y: 0 }}
             className="space-y-4">
@@ -387,6 +410,21 @@ export function InstructorPage() {
             </div>
           </motion.div>
 
+        ) : applyStatus === "approved" ? (
+          /* ── APPROVED but role not updated yet ── */
+          <motion.div
+            className="bg-green-500/5 border border-green-500/20 rounded-2xl p-8 text-center space-y-3">
+            <div className="w-14 h-14 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-7 h-7 text-green-400" />
+            </div>
+            <h2 className="text-[#0A0A0A] text-xl">Поздравляем! Заявка одобрена</h2>
+            <p className="text-[#6B6B6B] text-sm">Ваша заявка одобрена администратором. Обновите страницу чтобы войти в кабинет инструктора.</p>
+            <button onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white rounded-xl text-sm font-medium transition-colors">
+              Обновить страницу
+            </button>
+          </motion.div>
+
         ) : null}
       </div>
     </div>
@@ -398,17 +436,52 @@ export function InstructorPage() {
       <div className="max-w-7xl mx-auto px-6 lg:px-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
           <div>
             <h1 className="text-2xl text-[#0A0A0A] font-bold">Кабинет инструктора</h1>
             <p className="text-[#6B6B6B] text-sm mt-1">Добро пожаловать, {user.name} 👋</p>
           </div>
-          <button onClick={openCreate}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white text-sm rounded-xl transition-all hover:scale-105 shadow-lg shadow-black/8">
-            <Plus className="w-4 h-4" /> Новый курс
-          </button>
+          {activeTab === "courses" ? (
+            <button onClick={openCreate}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white text-sm rounded-xl transition-all hover:scale-105 shadow-lg shadow-[#0047FF]/25">
+              <Plus className="w-4 h-4" /> Новый курс
+            </button>
+          ) : (
+            <button onClick={handleCreateTest}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white text-sm rounded-xl transition-all hover:scale-105 shadow-lg shadow-[#0047FF]/25">
+              <Plus className="w-4 h-4" /> Новый тест
+            </button>
+          )}
         </div>
 
+        {/* Tab nav */}
+        <div className="flex gap-1 bg-white border border-[#E8E5DF] rounded-2xl p-1.5 mb-8 w-fit">
+          {([
+            { id: "courses", label: "Курсы", icon: BookOpen, count: courses.length },
+            { id: "tests",   label: "Тесты", icon: ClipboardList, count: tests.length },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? "bg-[#0047FF] text-white shadow-sm"
+                  : "text-[#6B6B6B] hover:text-[#0A0A0A] hover:bg-[#F5F3EE]"
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  activeTab === tab.id ? "bg-white/20 text-white" : "bg-[#F0EEE9] text-[#6B6B6B]"
+                }`}>{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "courses" && (
+          <>
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
@@ -544,6 +617,127 @@ export function InstructorPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+          </>
+        )}
+
+        {/* ── TESTS TAB ── */}
+        {activeTab === "tests" && (
+          <div>
+            {testsLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="w-8 h-8 border-2 border-[#0047FF] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : tests.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-[#E8E5DF] rounded-2xl">
+                <div className="text-5xl mb-4">📋</div>
+                <p className="text-[#0A0A0A] text-xl mb-2">Создайте первый тест</p>
+                <p className="text-[#6B6B6B] mb-6 text-sm">Тесты — отдельные опросники для проверки знаний, доступные на странице /study</p>
+                <button onClick={handleCreateTest}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] text-white rounded-xl text-sm transition-colors">
+                  <Plus className="w-4 h-4" /> Создать тест
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Filter badges */}
+                <div className="flex items-center gap-3 mb-4 text-sm text-[#6B6B6B]">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
+                    {tests.filter(t => t.status === "published").length} опубликовано
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                    {tests.filter(t => t.status === "draft").length} черновиков
+                  </span>
+                </div>
+
+                {tests.map(test => (
+                  <div key={test.id} className="bg-white border border-[#E8E5DF] rounded-2xl p-4 flex items-center gap-4">
+                    {/* Status dot */}
+                    <div className={`shrink-0 w-2.5 h-2.5 rounded-full ${test.status === "published" ? "bg-green-400" : "bg-amber-400"}`} />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[#0A0A0A] font-semibold text-sm truncate">{test.title || "Без названия"}</p>
+                      <div className="flex items-center gap-3 mt-0.5 text-xs text-[#8A8A8A]">
+                        <span className={`px-2 py-0.5 rounded-lg border text-[11px] font-medium ${
+                          test.status === "published"
+                            ? "bg-green-50 border-green-200 text-green-700"
+                            : "bg-amber-50 border-amber-200 text-amber-700"
+                        }`}>
+                          {test.status === "published" ? "Опубликован" : "Черновик"}
+                        </span>
+                        {(test as any).questions_count !== undefined && (
+                          <span className="flex items-center gap-1">
+                            <Hash className="w-3 h-3" />{(test as any).questions_count} вопросов
+                          </span>
+                        )}
+                        {test.category && <span>{test.category}</span>}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Publish toggle */}
+                      <button
+                        onClick={() => handleToggleTestPublish(test)}
+                        disabled={togglingTest === test.id}
+                        title={test.status === "published" ? "Снять с публикации" : "Опубликовать"}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          test.status === "published"
+                            ? "bg-green-50 border border-green-200 text-green-700 hover:bg-green-100"
+                            : "bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100"
+                        }`}
+                      >
+                        {togglingTest === test.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : test.status === "published" ? (
+                          <><Globe className="w-3.5 h-3.5" /> Опубликован</>
+                        ) : (
+                          <><EyeOff className="w-3.5 h-3.5" /> Черновик</>
+                        )}
+                      </button>
+
+                      {/* Edit in builder */}
+                      <a
+                        href={`/instructor/tests/${test.id}/build`}
+                        className="p-2 rounded-lg text-[#6B6B6B] hover:text-[#0047FF] hover:bg-[#0047FF]/5 border border-[#E8E5DF] transition-colors"
+                        title="Редактировать вопросы"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </a>
+
+                      {/* Delete */}
+                      {confirmDelTest === test.id ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleDeleteTest(test.id)}
+                            disabled={deletingTest === test.id}
+                            className="px-2.5 py-1.5 text-xs bg-red-600/10 border border-red-600/20 text-red-500 hover:bg-red-600/20 rounded-lg transition-colors"
+                          >
+                            {deletingTest === test.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Да, удалить"}
+                          </button>
+                          <button onClick={() => setConfirmDelTest(null)}
+                            className="px-2.5 py-1.5 text-xs bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] rounded-lg">
+                            Нет
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDelTest(test.id)}
+                          className="p-2 rounded-lg text-[#C0B8B0] hover:text-red-500 hover:bg-red-50 border border-[#E8E5DF] transition-colors"
+                          title="Удалить тест"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

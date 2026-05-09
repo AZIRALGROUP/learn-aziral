@@ -165,7 +165,7 @@ export function CourseDetailPage() {
     <div className="min-h-screen bg-[#F5F3EE] flex flex-col items-center justify-center pt-24 gap-4">
       <div className="text-4xl">😕</div>
       <p className="text-[#0A0A0A] text-xl">{error || "Курс не найден"}</p>
-      <Link to="/courses" className="flex items-center gap-2 text-[#0047FF] hover:text-[#0047FF] text-sm transition-colors">
+      <Link to="/" className="flex items-center gap-2 text-[#0047FF] hover:text-[#0047FF] text-sm transition-colors">
         <ArrowLeft className="w-4 h-4" /> К списку курсов
       </Link>
     </div>
@@ -194,7 +194,7 @@ export function CourseDetailPage() {
         <div className="relative w-full max-w-7xl mx-auto px-6 lg:px-8 pt-28 pb-8">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm text-white/50 mb-5">
-            <Link to="/courses" className="hover:text-white transition-colors flex items-center gap-1">
+            <Link to="/" className="hover:text-white transition-colors flex items-center gap-1">
               <ArrowLeft className="w-3.5 h-3.5" /> Курсы
             </Link>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -537,7 +537,7 @@ export function CourseDetailPage() {
                       { icon: Clock,      text: course.duration || "Гибкий темп",                         show: true },
                       { icon: Zap,        text: `${totalXp} XP опыта`,                                   show: totalXp > 0 },
                       { icon: Infinity,   text: "Пожизненный доступ",                                    show: true },
-                      { icon: Award,      text: "Сертификат по завершении",                              show: course.price > 0 || enrolled },
+                      { icon: Award,      text: "Сертификат по завершении",                              show: false },
                       { icon: Shield,     text: "Поддержка инструктора",                                 show: true },
                     ].filter(i => i.show).map((item, i) => (
                       <div key={i} className="flex items-center gap-2.5 text-sm">

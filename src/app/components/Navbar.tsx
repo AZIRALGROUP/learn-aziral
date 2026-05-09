@@ -31,15 +31,13 @@ export function Navbar() {
   // Don't render on full-screen pages that have their own nav
   if (HIDDEN_ROUTES.some(r => location.pathname.includes(r))) return null;
 
-  const isInstructor = user?.role === "instructor" || user?.role === "admin";
-
   const navLinks = [
     { label: "Каталог",         href: "/",          external: false },
-    { label: "Тесты",           href: "/study",      external: false },
+    { label: "Создание тестов", href: "/study",      external: false },
     {
       label: "Инструкторам",
-      href: isInstructor ? "/instructor" : `${MAIN_SITE}/instructor`,
-      external: !isInstructor,
+      href: "/instructor",
+      external: false,
     },
   ];
 

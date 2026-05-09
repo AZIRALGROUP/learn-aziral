@@ -5,7 +5,10 @@ services:
     restart: always
     networks:
       - fenix_fenix-network
+      - fenix-global-network
 
 networks:
   fenix_fenix-network:
+    external: true
+  fenix-global-network:
     external: true

@@ -1,9 +1,8 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { useEffect, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Toaster } from './components/ui/sonner';
 import { Navbar } from './components/Navbar';
-import { ErrorBoundary } from './components/ErrorBoundary';
 
 const CoursesPage        = lazy(() => import('./pages/CoursesPage').then(m => ({ default: m.CoursesPage })));
 const CourseDetailPage   = lazy(() => import('./pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
@@ -14,8 +13,6 @@ const ProfilePage        = lazy(() => import('./pages/ProfilePage').then(m => ({
 const StudyPage          = lazy(() => import('./pages/StudyPage').then(m => ({ default: m.StudyPage })));
 const TestTakingPage     = lazy(() => import('./pages/TestTakingPage').then(m => ({ default: m.TestTakingPage })));
 const TestBuilderPage    = lazy(() => import('./pages/TestBuilderPage').then(m => ({ default: m.TestBuilderPage })));
-const LoginPage          = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
-const RegisterPage       = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
 
 const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || 'https://aziral.com';
 
@@ -50,11 +47,15 @@ function ProtectedRoute({ children, requireRole }: { children: React.ReactNode; 
   }
 
   if (requireRole && user.role !== requireRole && user.role !== 'admin') {
-    window.location.href = MAIN_SITE;
-    return null;
+    return <Navigate to="/profile" replace />;
   }
 
   return <>{children}</>;
+}
+
+function ExternalRedirect({ to }: { to: string }) {
+  useEffect(() => { window.location.href = to; }, [to]);
+  return null;
 }
 
 function AppRoutes() {
@@ -68,14 +69,16 @@ function AppRoutes() {
           <Route path="/courses/:id"                     element={<CourseDetailPage />} />
           <Route path="/courses/:id/learn"               element={<ProtectedRoute><CourseLearningPage /></ProtectedRoute>} />
           <Route path="/courses/:id/learn/:lessonId"     element={<ProtectedRoute><CourseLearningPage /></ProtectedRoute>} />
-          <Route path="/instructor"                      element={<ProtectedRoute requireRole="instructor"><InstructorPage /></ProtectedRoute>} />
+          <Route path="/instructor"                      element={<ProtectedRoute><InstructorPage /></ProtectedRoute>} />
           <Route path="/instructor/courses/:id/build"    element={<ProtectedRoute requireRole="instructor"><CourseBuilderPage /></ProtectedRoute>} />
           <Route path="/profile"                         element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/study"                           element={<StudyPage />} />
           <Route path="/study/:id"                      element={<TestTakingPage />} />
           <Route path="/instructor/tests/:id/build"     element={<ProtectedRoute requireRole="instructor"><TestBuilderPage /></ProtectedRoute>} />
-          <Route path="/login"                          element={<LoginPage />} />
-          <Route path="/register"                       element={<RegisterPage />} />
+          <Route path="/courses"                        element={<Navigate to="/" replace />} />
+          <Route path="/login"                          element={<ExternalRedirect to={MAIN_SITE + '/login'} />} />
+          <Route path="/register"                       element={<ExternalRedirect to={MAIN_SITE + '/register'} />} />
+          <Route path="*"                               element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </>
@@ -84,13 +87,11 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-          <Toaster position="bottom-right" theme="dark" richColors />
-        </AuthProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+        <Toaster position="bottom-right" theme="dark" richColors />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

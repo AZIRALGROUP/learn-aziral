@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /study
+Disallow: /instructor/
+Disallow: /instructor/courses/
+Disallow: /instructor/tests/
+Disallow: /profile
+
+Sitemap: https://learn.aziral.com/sitemap.xml
