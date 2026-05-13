@@ -24,12 +24,19 @@ const CHATGPT_PROMPT = `Создай JSON файл с тестовыми воп�
     "type": "single",
     "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],
     "correct": [0]
+  },
+  {
+    "question": "Какие верны?",
+    "type": "multi",
+    "options": ["Вариант A", "Вариант B", "Вариант C", "Вариант D"],
+    "correct": [0, 2],
+    "count": 2
   }
 ]
 
 Типы вопросов:
 - "single" — один правильный ответ, correct: [индекс от 0]
-- "multi" — несколько правильных, correct: [0, 2]
+- "multi" — несколько правильных, correct: [0, 2], count: количество правильных ответов
 - "tf" — Правда/Ложь, options: ["Правда", "Ложь"], correct: [0] или [1]
 
 Верни ТОЛЬКО JSON массив, без объяснений и без markdown.`;
@@ -598,7 +605,7 @@ export function TestBuilderPage() {
     try {
       const parsed = JSON.parse(raw);
       // Smart unwrap: flat array, { questions: [...] } wrapper, or single object
-      let arr: object[];
+      let arr: any[];
       if (Array.isArray(parsed)) {
         arr = parsed;
       } else if (parsed.questions && Array.isArray(parsed.questions)) {
@@ -607,6 +614,13 @@ export function TestBuilderPage() {
         arr = [parsed];
       }
       if (arr.length === 0) { flash("JSON пустой — нет вопросов", true); setImporting(false); return; }
+      // Ensure count is set for multi-answer questions
+      arr = arr.map((q: any) => {
+        if (q.type === 'multi' && !q.count && q.correct && Array.isArray(q.correct)) {
+          return { ...q, count: q.correct.length };
+        }
+        return q;
+      });
       const res = await testsApi.importQuestions(test.id, arr);
       const msg = (res as any).skipped > 0
         ? `Импортировано: ${res.imported}, пропущено: ${(res as any).skipped} (нет текста вопроса)`
@@ -672,8 +686,8 @@ export function TestBuilderPage() {
   }
 
   /* Quick Input parser */
-  function parseQuickText(text: string): {question: string; type: string; options: string[]; correct: number[]}[] {
-    const results: {question: string; type: string; options: string[]; correct: number[]}[] = [];
+  function parseQuickText(text: string): {question: string; type: string; options: string[]; correct: number[]; count?: number}[] {
+    const results: {question: string; type: string; options: string[]; correct: number[]; count?: number}[] = [];
     const lines = text.split('\n').map(l => l.trim());
 
     let currentQuestion = '';
@@ -683,7 +697,9 @@ export function TestBuilderPage() {
     function flush() {
       if (currentQuestion && options.length > 0) {
         const type = correct.length > 1 ? 'multi' : 'single';
-        results.push({ question: currentQuestion, type, options, correct });
+        const payload: {question: string; type: string; options: string[]; correct: number[]; count?: number} = { question: currentQuestion, type, options, correct };
+        if (type === 'multi') payload.count = correct.length;
+        results.push(payload);
       }
       options = [];
       correct = [];
@@ -726,7 +742,7 @@ export function TestBuilderPage() {
 
 
   /* ── Spreadsheet (CSV / Excel) import ─────────────────────────── */
-  function parseSpreadsheet(data: unknown[][]): {question: string; type: string; options: string[]; correct: number[]}[] {
+  function parseSpreadsheet(data: unknown[][]): {question: string; type: string; options: string[]; correct: number[]; count?: number}[] {
     if (data.length === 0) return [];
 
     // Detect if first row is a header
@@ -751,7 +767,7 @@ export function TestBuilderPage() {
     }
 
     const rows = hasHeader ? data.slice(1) : data;
-    const results: {question: string; type: string; options: string[]; correct: number[]}[] = [];
+    const results: {question: string; type: string; options: string[]; correct: number[]; count?: number}[] = [];
 
     for (const row of rows) {
       const cells = row.map(c => String(c || '').trim());
@@ -786,7 +802,9 @@ export function TestBuilderPage() {
       if (typeRaw.includes('multi') || typeRaw.includes('несколько') || correct.length > 1) type = 'multi';
       else if (typeRaw.includes('tf') || typeRaw.includes('true') || typeRaw.includes('правда')) type = 'tf';
 
-      results.push({ question: questionText, type, options, correct });
+      const payload: {question: string; type: string; options: string[]; correct: number[]; count?: number} = { question: questionText, type, options, correct };
+      if (type === 'multi') payload.count = correct.length;
+      results.push(payload);
     }
     return results;
   }
