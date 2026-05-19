@@ -471,118 +471,188 @@ export function InstructorPage() {
   const pendingCount = courses.filter(c => c.status === "pending").length;
   const totalStudents = courses.reduce((a, c) => a + (c.active_students || 0), 0);
   const totalPending = courses.reduce((a, c) => a + (c.pending_payments || 0), 0);
+  const publishedTests = tests.filter(t => t.status === "published").length;
+
+  // States: чтобы не дублировать CTA и не загромождать пустыми числами
+  const isCompletelyNew = !loading && courses.length === 0 && tests.length === 0 && earnings.gross === 0;
+  const isPartiallyStarted = !loading && !isCompletelyNew && (courses.length === 0 || tests.length === 0);
 
   return (
     <div className="min-h-screen bg-[#F5F3EE] pt-24 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0047FF] to-[#3366FF] flex items-center justify-center shadow-lg shadow-[#0047FF]/20 shrink-0">
               <GraduationCap className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl text-[#0A0A0A] font-bold tracking-tight">Кабинет инструктора</h1>
-              <p className="text-[#6B6B6B] text-sm sm:text-base mt-1">Добро пожаловать, {user.name} 👋</p>
+              <p className="text-[#6B6B6B] text-sm sm:text-base mt-1">{user.name}</p>
             </div>
           </div>
-          {activeTab === "courses" ? (
-            <button onClick={openCreate}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0">
-              <Plus className="w-4 h-4" /> Новый курс
-            </button>
-          ) : (
-            <button onClick={handleCreateTest}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0">
-              <Plus className="w-4 h-4" /> Новый тест
-            </button>
+          {/* CTA в header — только когда есть контент (не дублирует hero) */}
+          {!isCompletelyNew && (
+            activeTab === "courses" ? (
+              <button onClick={openCreate}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0">
+                <Plus className="w-4 h-4" /> Новый курс
+              </button>
+            ) : (
+              <button onClick={handleCreateTest}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0">
+                <Plus className="w-4 h-4" /> Новый тест
+              </button>
+            )
           )}
         </div>
 
-        {/* Stats — always visible, even on tests tab */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: pluralCourses(courses.length), value: courses.length, icon: BookOpen, accent: "bg-[#0047FF]/10 text-[#0047FF]", sub: publishedCount > 0 ? `${publishedCount} опубл.` : null },
-            { label: pluralTests(tests.length), value: tests.length, icon: ClipboardList, accent: "bg-purple-500/10 text-purple-600", sub: tests.filter(t => t.status === "published").length > 0 ? `${tests.filter(t => t.status === "published").length} опубл.` : null },
-            { label: pluralStudents(totalStudents), value: totalStudents, icon: Users, accent: "bg-emerald-500/10 text-emerald-600", sub: null },
-            { label: "Заработано", value: `${earnings.net.toLocaleString()} ₸`, icon: Wallet, accent: "bg-amber-500/10 text-amber-600", sub: earnings.gross > 0 ? `оборот ${earnings.gross.toLocaleString()} ₸` : null },
-          ].map(s => (
-            <div key={s.label} className="bg-white border border-[#E8E5DF] rounded-2xl p-4 hover:border-[#0047FF]/20 hover:shadow-sm transition-all">
-              <div className={`w-10 h-10 rounded-xl ${s.accent} flex items-center justify-center mb-3`}>
-                <s.icon className="w-5 h-5" />
+        {/* ═══════════════════════════════════════════════════════
+            STATE 1: Completely new — focus на hero, ничего лишнего
+           ═══════════════════════════════════════════════════════ */}
+        {isCompletelyNew && (
+          <div className="relative overflow-hidden bg-gradient-to-br from-[#0047FF] via-[#1f5cff] to-[#3366FF] rounded-3xl p-6 sm:p-10 text-white">
+            {/* Decorative blurs */}
+            <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full -translate-y-1/3 translate-x-1/3 blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-1/4 w-56 h-56 bg-cyan-400/15 rounded-full translate-y-1/2 blur-2xl pointer-events-none" />
+            <div className="absolute top-1/3 left-0 w-40 h-40 bg-purple-400/10 rounded-full -translate-x-1/2 blur-2xl pointer-events-none" />
+
+            <div className="relative grid lg:grid-cols-5 gap-6 lg:gap-10 items-center">
+              {/* Left: text */}
+              <div className="lg:col-span-3 space-y-4">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 backdrop-blur-sm rounded-full border border-white/20">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Добро пожаловать</span>
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-bold leading-tight">
+                  Превратите свои знания<br/>в доход 💰
+                </h2>
+                <p className="text-white/85 text-base sm:text-lg leading-relaxed max-w-xl">
+                  Создавайте курсы и тесты для студентов. Получайте <strong className="text-white">80% от каждой продажи</strong>.
+                </p>
+
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <button onClick={openCreate}
+                    className="group inline-flex items-center gap-2 px-5 py-3 bg-white text-[#0047FF] hover:bg-blue-50 active:scale-[0.98] rounded-xl font-semibold text-sm transition-all shadow-lg shadow-black/10">
+                    <BookOpen className="w-4 h-4" />
+                    Создать первый курс
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                  <button onClick={handleCreateTest}
+                    className="group inline-flex items-center gap-2 px-5 py-3 bg-white/15 hover:bg-white/20 backdrop-blur-sm border border-white/20 active:scale-[0.98] rounded-xl font-medium text-sm transition-all">
+                    <ClipboardList className="w-4 h-4" />
+                    Или сначала тест
+                  </button>
+                </div>
               </div>
-              <p className="text-xl sm:text-2xl font-bold text-[#0A0A0A] leading-tight">{s.value}</p>
-              <p className="text-[#6B6B6B] text-xs mt-0.5">{s.label}</p>
-              {s.sub && <p className="text-[#8A8A8A] text-[11px] mt-1">{s.sub}</p>}
-            </div>
-          ))}
-        </div>
 
-        {/* Quick Start guide — для тех у кого нет курсов или нет тестов (онбординг) */}
-        {!loading && (courses.length === 0 || tests.length === 0) && earnings.gross === 0 && (
-          <div className="bg-gradient-to-br from-[#0047FF] to-[#3366FF] rounded-2xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden">
-            {/* Decorative background */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="absolute bottom-0 left-1/2 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-5 h-5" />
-                <span className="text-xs font-bold uppercase tracking-wider opacity-80">С чего начать</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-2">Добро пожаловать в кабинет! 🎉</h2>
-              <p className="text-white/80 text-sm sm:text-base mb-6 max-w-2xl">
-                Здесь вы создаёте курсы и тесты для своих студентов. Получаете <strong>80%</strong> от каждой продажи и работаете в удобном инструменте.
-              </p>
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <button onClick={openCreate}
-                  className="group flex items-start gap-3 text-left bg-white/10 hover:bg-white/15 active:scale-[0.98] backdrop-blur-sm border border-white/15 rounded-xl p-4 transition-all">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="font-semibold text-sm">Создайте курс</p>
-                      <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform" />
+              {/* Right: benefits cards */}
+              <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
+                {[
+                  { icon: TrendingUp, title: "80% выручки", desc: "Платформа берёт 20%" },
+                  { icon: Sparkles,   title: "AI-помощник", desc: "Генерация вопросов" },
+                  { icon: Users,      title: "Готовая аудитория", desc: "Студенты из каталога" },
+                ].map((b, i) => (
+                  <div key={i} className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl p-3">
+                    <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                      <b.icon className="w-4.5 h-4.5" />
                     </div>
-                    <p className="text-xs text-white/70 leading-snug">Уроки, программа, цена — всё в одном месте</p>
-                  </div>
-                </button>
-
-                <button onClick={handleCreateTest}
-                  className="group flex items-start gap-3 text-left bg-white/10 hover:bg-white/15 active:scale-[0.98] backdrop-blur-sm border border-white/15 rounded-xl p-4 transition-all">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                    <ClipboardList className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="font-semibold text-sm">Создайте тест</p>
-                      <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm leading-tight">{b.title}</p>
+                      <p className="text-xs text-white/70 leading-tight mt-0.5">{b.desc}</p>
                     </div>
-                    <p className="text-xs text-white/70 leading-snug">Опросник для проверки знаний — публикуется в /study</p>
                   </div>
-                </button>
-              </div>
-
-              <div className="grid sm:grid-cols-3 gap-2 mt-5 pt-5 border-t border-white/15">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                  <span className="text-xs text-white/80">80% от продаж — вам</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                  <span className="text-xs text-white/80">Без лимита на курсы</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                  <span className="text-xs text-white/80">AI-помощник для вопросов</span>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         )}
+
+        {/* ═══════════════════════════════════════════════════════
+            STATE 2 & 3: есть какой-то контент — показываем stats + content
+           ═══════════════════════════════════════════════════════ */}
+        {!isCompletelyNew && (
+          <>
+            {/* Stats — компактнее, более информативные */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+              {[
+                {
+                  label: pluralCourses(courses.length),
+                  value: courses.length,
+                  icon: BookOpen,
+                  accent: "bg-[#0047FF]/10 text-[#0047FF]",
+                  sub: publishedCount > 0 ? `${publishedCount} опубл.` : courses.length > 0 ? "все на проверке" : null,
+                  emptyHint: "Создайте первый",
+                },
+                {
+                  label: pluralTests(tests.length),
+                  value: tests.length,
+                  icon: ClipboardList,
+                  accent: "bg-purple-500/10 text-purple-600",
+                  sub: publishedTests > 0 ? `${publishedTests} опубл.` : tests.length > 0 ? "только черновики" : null,
+                  emptyHint: "Создайте тест",
+                },
+                {
+                  label: pluralStudents(totalStudents),
+                  value: totalStudents,
+                  icon: Users,
+                  accent: "bg-emerald-500/10 text-emerald-600",
+                  sub: totalPending > 0 ? `+${totalPending} ожидают оплаты` : null,
+                  emptyHint: courses.length === 0 ? "После публикации курса" : "Пока никто не записался",
+                },
+                {
+                  label: "Заработано",
+                  value: `${earnings.net.toLocaleString()} ₸`,
+                  icon: Wallet,
+                  accent: "bg-amber-500/10 text-amber-600",
+                  sub: earnings.gross > 0 ? `оборот ${earnings.gross.toLocaleString()} ₸` : null,
+                  emptyHint: "С каждой продажи — 80%",
+                },
+              ].map(s => (
+                <div key={s.label} className="bg-white border border-[#E8E5DF] rounded-2xl p-4 hover:border-[#0047FF]/20 hover:shadow-sm transition-all">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className={`w-10 h-10 rounded-xl ${s.accent} flex items-center justify-center`}>
+                      <s.icon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold text-[#0A0A0A] leading-tight">{s.value}</p>
+                  <p className="text-[#6B6B6B] text-xs mt-1">{s.label}</p>
+                  {s.sub
+                    ? <p className="text-[#8A8A8A] text-[11px] mt-1.5 truncate">{s.sub}</p>
+                    : s.emptyHint && <p className="text-[#A0A0A0] text-[11px] mt-1.5 truncate italic">{s.emptyHint}</p>
+                  }
+                </div>
+              ))}
+            </div>
+
+            {/* Partially started → ненавязчивый "следующий шаг" */}
+            {isPartiallyStarted && (
+              <div className="bg-gradient-to-r from-[#0047FF]/8 via-[#0047FF]/5 to-transparent border border-[#0047FF]/20 rounded-2xl p-4 sm:p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#0047FF] to-[#3366FF] flex items-center justify-center shrink-0 shadow-md shadow-[#0047FF]/25">
+                  {courses.length === 0 ? <BookOpen className="w-5 h-5 text-white" /> : <ClipboardList className="w-5 h-5 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#0A0A0A] font-semibold text-sm sm:text-base">
+                    {courses.length === 0
+                      ? "Следующий шаг — создайте курс"
+                      : "Дополните курсы тестами"}
+                  </p>
+                  <p className="text-[#6B6B6B] text-xs sm:text-sm mt-0.5">
+                    {courses.length === 0
+                      ? `У вас уже ${tests.length} ${pluralTests(tests.length)} — добавьте курс и студенты смогут платить за обучение`
+                      : "Тесты помогают студентам закрепить материал"}
+                  </p>
+                </div>
+                <button
+                  onClick={courses.length === 0 ? openCreate : handleCreateTest}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0"
+                >
+                  {courses.length === 0 ? "Создать курс" : "Создать тест"}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
         {/* Revenue banner */}
         {earnings.gross > 0 && (
@@ -948,6 +1018,8 @@ export function InstructorPage() {
               </div>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
 
