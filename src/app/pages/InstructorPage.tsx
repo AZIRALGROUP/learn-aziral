@@ -519,8 +519,8 @@ export function InstructorPage() {
           ))}
         </div>
 
-        {/* Quick Start guide — show only when truly empty */}
-        {!loading && courses.length === 0 && tests.length === 0 && earnings.gross === 0 && (
+        {/* Quick Start guide — для тех у кого нет курсов или нет тестов (онбординг) */}
+        {!loading && (courses.length === 0 || tests.length === 0) && earnings.gross === 0 && (
           <div className="bg-gradient-to-br from-[#0047FF] to-[#3366FF] rounded-2xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden">
             {/* Decorative background */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
