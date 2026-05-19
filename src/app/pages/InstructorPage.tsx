@@ -68,6 +68,7 @@ export function InstructorPage() {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [copied, setCopied]               = useState(false);
   const [applyForm, setApplyForm]         = useState({ bio: "", experience: "", team_name: "" });
+  const [showApply, setShowApply]         = useState(false); // открыть apply экран для не-инструктора
 
   const location = useLocation();
   const isInstructor = user?.role === "instructor" || user?.role === "admin";
@@ -87,12 +88,11 @@ export function InstructorPage() {
 
   useEffect(() => {
     if (!user) return;
+    loadTests(); // тесты доступны всем залогиненным
     if (isInstructor) {
-      loadData();
-      loadTests(); // загружаем сразу, чтобы счётчики были актуальны
-    } else {
-      checkApply();
+      loadData(); // курсы и earnings — только инструкторам
     }
+    checkApply(); // проверяем статус заявки (если есть)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -243,10 +243,282 @@ export function InstructorPage() {
     </div>
   );
 
-  // ── APPLY PAGE ──
-  if (!isInstructor) return (
+  // Pre-compute test stats (нужно и в user mode и в dashboard)
+  const publishedTests = tests.filter(t => t.status === "published").length;
+
+  // ═══════════════════════════════════════════════════════════
+  //   USER MODE — тесты доступны всем залогиненным
+  //   Apply flow открывается только по кнопке "Стать инструктором"
+  // ═══════════════════════════════════════════════════════════
+  if (!isInstructor && !showApply) {
+    const hasApplyInProgress = applyStatus && applyStatus !== "rejected";
+
+    return (
+      <div className="min-h-screen bg-[#F5F3EE] pt-24 pb-20">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 sm:mb-8">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/20 shrink-0">
+                <ClipboardList className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl text-[#0A0A0A] font-bold tracking-tight">Мои тесты</h1>
+                <p className="text-[#6B6B6B] text-sm sm:text-base mt-1">
+                  Создавайте тесты — это бесплатно, доступно всем
+                </p>
+              </div>
+            </div>
+            {tests.length > 0 && (
+              <button onClick={handleCreateTest}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0">
+                <Plus className="w-4 h-4" /> Новый тест
+              </button>
+            )}
+          </div>
+
+          {/* Tests content */}
+          {testsLoading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-8 h-8 border-2 border-[#0047FF] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : tests.length === 0 ? (
+            /* Empty state — большой hero про тесты */
+            <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 via-purple-600 to-[#0047FF] rounded-3xl p-6 sm:p-10 text-white mb-6">
+              <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full -translate-y-1/3 translate-x-1/3 blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-56 h-56 bg-pink-400/20 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl pointer-events-none" />
+
+              <div className="relative grid lg:grid-cols-5 gap-6 lg:gap-10 items-center">
+                <div className="lg:col-span-3 space-y-4">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 backdrop-blur-sm rounded-full border border-white/20">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Бесплатно для всех</span>
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl font-bold leading-tight">
+                    Создавайте свои тесты ✏️
+                  </h2>
+                  <p className="text-white/85 text-base sm:text-lg leading-relaxed max-w-xl">
+                    Готовьтесь к экзаменам, проверяйте знания, делитесь с друзьями. <strong className="text-white">Без оплаты, без лимитов.</strong>
+                  </p>
+
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <button onClick={handleCreateTest}
+                      className="group inline-flex items-center gap-2 px-5 py-3 bg-white text-purple-700 hover:bg-purple-50 active:scale-[0.98] rounded-xl font-semibold text-sm transition-all shadow-lg shadow-black/10">
+                      <Plus className="w-4 h-4" />
+                      Создать первый тест
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
+                  {[
+                    { icon: Sparkles,      title: "AI генерация",     desc: "Создавай вопросы из темы за секунды" },
+                    { icon: FileText,      title: "Импорт JSON/Excel", desc: "Загрузи готовый список" },
+                    { icon: Globe,         title: "Публикация в /study", desc: "Все могут пройти твой тест" },
+                  ].map((b, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/15 rounded-xl p-3">
+                      <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                        <b.icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm leading-tight">{b.title}</p>
+                        <p className="text-xs text-white/70 leading-tight mt-0.5">{b.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Tests list */
+            <>
+              {/* Tests stats — компактно */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+                <div className="bg-white border border-[#E8E5DF] rounded-2xl p-4">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center mb-3">
+                    <ClipboardList className="w-5 h-5" />
+                  </div>
+                  <p className="text-2xl font-bold text-[#0A0A0A]">{tests.length}</p>
+                  <p className="text-[#6B6B6B] text-xs mt-1">{pluralTests(tests.length)}</p>
+                </div>
+                <div className="bg-white border border-[#E8E5DF] rounded-2xl p-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-3">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                  <p className="text-2xl font-bold text-[#0A0A0A]">{publishedTests}</p>
+                  <p className="text-[#6B6B6B] text-xs mt-1">опубликовано</p>
+                </div>
+                <div className="bg-white border border-[#E8E5DF] rounded-2xl p-4 col-span-2 sm:col-span-1">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-3">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <p className="text-2xl font-bold text-[#0A0A0A]">{tests.length - publishedTests}</p>
+                  <p className="text-[#6B6B6B] text-xs mt-1">{pluralDrafts(tests.length - publishedTests)}</p>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative mb-5">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A0A0A0] pointer-events-none" />
+                <input
+                  type="text"
+                  value={testSearch}
+                  onChange={(e) => setTestSearch(e.target.value)}
+                  placeholder="Поиск по тестам..."
+                  className="w-full pl-11 pr-10 py-3 rounded-xl bg-white border border-[#E8E5DF] text-sm text-[#1A1A1A] placeholder:text-[#A0A0A0] focus:outline-none focus:ring-2 focus:ring-[#0047FF]/20 focus:border-[#0047FF] transition-shadow"
+                />
+                {testSearch && (
+                  <button onClick={() => setTestSearch("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-[#F0EEE9] transition-colors">
+                    <X className="w-4 h-4 text-[#8A8A8A]" />
+                  </button>
+                )}
+              </div>
+
+              {filteredTests.length === 0 ? (
+                <EmptyState
+                  icon={Search}
+                  title="Ничего не найдено"
+                  description="Попробуйте изменить запрос поиска"
+                  cta={{ label: "Очистить поиск", onClick: () => setTestSearch(""), icon: X }}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {filteredTests.map(test => (
+                    <div key={test.id} className="group bg-white border border-[#E8E5DF] rounded-2xl p-4 flex items-center gap-3 sm:gap-4 hover:border-[#0047FF]/30 hover:shadow-sm transition-all">
+                      <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                        test.status === "published" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                      }`}>
+                        <FileText className="w-5 h-5" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <Link to={`/instructor/tests/${test.id}/build`} className="block">
+                          <p className="text-[#0A0A0A] font-semibold text-sm truncate group-hover:text-[#0047FF] transition-colors">
+                            {test.title || "Без названия"}
+                          </p>
+                        </Link>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-[#8A8A8A] flex-wrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                            test.status === "published" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                          }`}>
+                            {test.status === "published" ? "✓ Опубликован" : "○ Черновик"}
+                          </span>
+                          {test.question_count !== undefined && (
+                            <span className="inline-flex items-center gap-1">
+                              <Hash className="w-3 h-3" />{test.question_count} {pluralQuestions(test.question_count)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleToggleTestPublish(test)}
+                          disabled={togglingTest === test.id}
+                          className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                            test.status === "published"
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                              : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                          }`}
+                        >
+                          {togglingTest === test.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : test.status === "published" ? <><Globe className="w-3.5 h-3.5" /> Активен</> : <><EyeOff className="w-3.5 h-3.5" /> Скрыт</>}
+                        </button>
+                        <button onClick={() => handleToggleTestPublish(test)} disabled={togglingTest === test.id}
+                          className={`sm:hidden p-2 rounded-lg border transition-colors ${
+                            test.status === "published" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-amber-50 border-amber-200 text-amber-700"
+                          }`}>
+                          {togglingTest === test.id ? <Loader2 className="w-4 h-4 animate-spin" /> : test.status === "published" ? <Globe className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+
+                        <Link to={`/instructor/tests/${test.id}/build`}
+                          className="p-2 rounded-lg text-[#6B6B6B] hover:text-[#0047FF] hover:bg-[#0047FF]/5 border border-[#E8E5DF] transition-colors"
+                          title="Редактировать вопросы">
+                          <Pencil className="w-4 h-4" />
+                        </Link>
+
+                        {confirmDelTest === test.id ? (
+                          <div className="flex gap-1">
+                            <button onClick={() => handleDeleteTest(test.id)} disabled={deletingTest === test.id}
+                              className="px-2.5 py-1.5 text-xs bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-lg transition-colors font-medium">
+                              {deletingTest === test.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Да"}
+                            </button>
+                            <button onClick={() => setConfirmDelTest(null)}
+                              className="px-2.5 py-1.5 text-xs bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] rounded-lg hover:bg-[#F0EEE9]">Нет</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmDelTest(test.id)}
+                            className="p-2 rounded-lg text-[#C0B8B0] hover:text-red-500 hover:bg-red-50 border border-[#E8E5DF] transition-colors"
+                            title="Удалить тест">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Upgrade CTA — Стать инструктором для продажи курсов */}
+          <div className="mt-8 bg-white border border-[#E8E5DF] rounded-2xl overflow-hidden">
+            <div className="grid sm:grid-cols-5">
+              {/* Left visual */}
+              <div className="sm:col-span-2 relative bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 p-6 flex items-center justify-center min-h-[160px]">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.15),transparent)] pointer-events-none" />
+                <div className="relative text-center text-white">
+                  <div className="w-14 h-14 mx-auto bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-3 shadow-lg">
+                    <GraduationCap className="w-7 h-7" />
+                  </div>
+                  <p className="text-3xl font-bold leading-tight">80%</p>
+                  <p className="text-white/85 text-xs mt-1">с каждой продажи курса — вам</p>
+                </div>
+              </div>
+
+              {/* Right content */}
+              <div className="sm:col-span-3 p-6 sm:p-7 flex flex-col gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1.5">Хотите больше?</p>
+                  <h3 className="text-xl font-bold text-[#0A0A0A] leading-tight">Создавайте платные курсы и зарабатывайте</h3>
+                </div>
+                <p className="text-[#6B6B6B] text-sm leading-relaxed">
+                  Тесты — это здорово, но настоящий доход приносят курсы с уроками. Станьте инструктором за <strong className="text-[#0A0A0A]">5 000 ₸</strong> разово — и получайте 80% с каждой продажи.
+                </p>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  <button onClick={() => setShowApply(true)}
+                    className="group inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.97] text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-emerald-600/25">
+                    {hasApplyInProgress ? "Продолжить заявку" : "Стать инструктором"}
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                  {hasApplyInProgress && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-lg">
+                      <Clock className="w-3 h-3" /> Заявка в процессе
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //   APPLY PAGE — открывается по кнопке "Стать инструктором"
+  // ═══════════════════════════════════════════════════════════
+  if (!isInstructor && showApply) return (
     <div className="min-h-screen bg-[#F5F3EE] pt-24 pb-20">
       <div className="max-w-2xl mx-auto px-4 sm:px-6">
+
+        {/* Back button */}
+        <button onClick={() => setShowApply(false)}
+          className="inline-flex items-center gap-1.5 text-sm text-[#6B6B6B] hover:text-[#0047FF] transition-colors mb-6">
+          <ArrowRight className="w-4 h-4 rotate-180" /> Назад к тестам
+        </button>
 
         {/* Header */}
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-center mb-10">
@@ -255,7 +527,7 @@ export function InstructorPage() {
           </div>
           <h1 className="text-3xl text-[#0A0A0A] font-bold mb-3">Стать инструктором</h1>
           <p className="text-[#6B6B6B] text-lg">
-            Создавайте курсы и зарабатывайте{" "}
+            Создавайте <strong>платные курсы</strong> и зарабатывайте{" "}
             <span className="text-[#0047FF] font-semibold">80% от каждой продажи</span>
           </p>
         </motion.div>
@@ -471,7 +743,7 @@ export function InstructorPage() {
   const pendingCount = courses.filter(c => c.status === "pending").length;
   const totalStudents = courses.reduce((a, c) => a + (c.active_students || 0), 0);
   const totalPending = courses.reduce((a, c) => a + (c.pending_payments || 0), 0);
-  const publishedTests = tests.filter(t => t.status === "published").length;
+  // publishedTests уже посчитан выше (нужен для user mode)
 
   // States: чтобы не дублировать CTA и не загромождать пустыми числами
   const isCompletelyNew = !loading && courses.length === 0 && tests.length === 0 && earnings.gross === 0;
@@ -1252,3 +1524,4 @@ const pluralCourses    = (n: number) => plural(n, ["курс", "курса", "к
 const pluralTests      = (n: number) => plural(n, ["тест", "теста", "тестов"]);
 const pluralStudents   = (n: number) => plural(n, ["студент", "студента", "студентов"]);
 const pluralQuestions  = (n: number) => plural(n, ["вопрос", "вопроса", "вопросов"]);
+const pluralDrafts     = (n: number) => plural(n, ["черновик", "черновика", "черновиков"]);
