@@ -87,15 +87,14 @@ export function InstructorPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (isInstructor) loadData();
-    else checkApply();
+    if (isInstructor) {
+      loadData();
+      loadTests(); // загружаем сразу, чтобы счётчики были актуальны
+    } else {
+      checkApply();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-
-  useEffect(() => {
-    if (isInstructor && activeTab === "tests") loadTests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isInstructor]);
 
   const loadData = async () => {
     setLoading(true);
@@ -505,11 +504,11 @@ export function InstructorPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {[
             { label: pluralCourses(courses.length), value: courses.length, icon: BookOpen, accent: "bg-[#0047FF]/10 text-[#0047FF]", sub: publishedCount > 0 ? `${publishedCount} опубл.` : null },
-            { label: pluralTests(tests.length || 0), value: tests.length || "—", icon: ClipboardList, accent: "bg-purple-500/10 text-purple-600", sub: tests.filter(t => t.status === "published").length > 0 ? `${tests.filter(t => t.status === "published").length} опубл.` : null },
+            { label: pluralTests(tests.length), value: tests.length, icon: ClipboardList, accent: "bg-purple-500/10 text-purple-600", sub: tests.filter(t => t.status === "published").length > 0 ? `${tests.filter(t => t.status === "published").length} опубл.` : null },
             { label: pluralStudents(totalStudents), value: totalStudents, icon: Users, accent: "bg-emerald-500/10 text-emerald-600", sub: null },
             { label: "Заработано", value: `${earnings.net.toLocaleString()} ₸`, icon: Wallet, accent: "bg-amber-500/10 text-amber-600", sub: earnings.gross > 0 ? `оборот ${earnings.gross.toLocaleString()} ₸` : null },
           ].map(s => (
-            <div key={s.label} className="bg-white border border-[#E8E5DF] rounded-2xl p-4">
+            <div key={s.label} className="bg-white border border-[#E8E5DF] rounded-2xl p-4 hover:border-[#0047FF]/20 hover:shadow-sm transition-all">
               <div className={`w-10 h-10 rounded-xl ${s.accent} flex items-center justify-center mb-3`}>
                 <s.icon className="w-5 h-5" />
               </div>
@@ -519,6 +518,71 @@ export function InstructorPage() {
             </div>
           ))}
         </div>
+
+        {/* Quick Start guide — show only when truly empty */}
+        {!loading && courses.length === 0 && tests.length === 0 && earnings.gross === 0 && (
+          <div className="bg-gradient-to-br from-[#0047FF] to-[#3366FF] rounded-2xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden">
+            {/* Decorative background */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute bottom-0 left-1/2 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-5 h-5" />
+                <span className="text-xs font-bold uppercase tracking-wider opacity-80">С чего начать</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold mb-2">Добро пожаловать в кабинет! 🎉</h2>
+              <p className="text-white/80 text-sm sm:text-base mb-6 max-w-2xl">
+                Здесь вы создаёте курсы и тесты для своих студентов. Получаете <strong>80%</strong> от каждой продажи и работаете в удобном инструменте.
+              </p>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <button onClick={openCreate}
+                  className="group flex items-start gap-3 text-left bg-white/10 hover:bg-white/15 active:scale-[0.98] backdrop-blur-sm border border-white/15 rounded-xl p-4 transition-all">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="font-semibold text-sm">Создайте курс</p>
+                      <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                    <p className="text-xs text-white/70 leading-snug">Уроки, программа, цена — всё в одном месте</p>
+                  </div>
+                </button>
+
+                <button onClick={handleCreateTest}
+                  className="group flex items-start gap-3 text-left bg-white/10 hover:bg-white/15 active:scale-[0.98] backdrop-blur-sm border border-white/15 rounded-xl p-4 transition-all">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="font-semibold text-sm">Создайте тест</p>
+                      <ArrowRight className="w-3.5 h-3.5 opacity-60 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                    <p className="text-xs text-white/70 leading-snug">Опросник для проверки знаний — публикуется в /study</p>
+                  </div>
+                </button>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-2 mt-5 pt-5 border-t border-white/15">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span className="text-xs text-white/80">80% от продаж — вам</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span className="text-xs text-white/80">Без лимита на курсы</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+                  <span className="text-xs text-white/80">AI-помощник для вопросов</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Revenue banner */}
         {earnings.gross > 0 && (
