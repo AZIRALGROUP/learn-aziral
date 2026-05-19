@@ -45,10 +45,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           envs: DEPLOY_TOKEN
-          script: |
-            cd /var/www/learn-aziral
-            git remote set-url origin https://x-access-token:${DEPLOY_TOKEN}@github.com/AZIRALGROUP/learn-aziral.git
-            git fetch origin main
-            git reset --hard origin/main
-            docker compose up -d --build
-            docker ps
+          script_stop: true
+          # Use centralized deploy script on the server:
+          #   /home/olzhas/bin/deploy-learn-aziral.sh
+          # It clones repo, builds image, recreates container,
+          # reloads NGINX Proxy Manager (fixes 502 after recreate)
+          # and verifies HTTP 200.
+          script: /home/olzhas/bin/deploy-learn-aziral.sh
