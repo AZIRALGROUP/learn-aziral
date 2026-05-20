@@ -197,9 +197,9 @@ export function StudyPage() {
   /* ── Render ──────────────────────────────────────────── */
   return (
     <div className="min-h-screen bg-[#F5F3EE]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-16">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28 pb-16">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6 sm:mb-8">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0047FF] to-[#3366FF] flex items-center justify-center shadow-lg shadow-[#0047FF]/20 shrink-0">
               <GraduationCap className="w-6 h-6 text-white" />
@@ -271,7 +271,7 @@ export function StudyPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск по названию, описанию или преподавателю..."
+              placeholder="Поиск тестов..."
               className="w-full pl-11 pr-10 py-3 rounded-xl bg-white border border-[#E8E5DF] text-sm text-[#1A1A1A]
                          placeholder:text-[#A0A0A0] focus:outline-none focus:ring-2 focus:ring-[#0047FF]/20 focus:border-[#0047FF]
                          transition-shadow"
@@ -293,7 +293,7 @@ export function StudyPage() {
               onClick={() => setSortOpen((v) => !v)}
               onBlur={() => setTimeout(() => setSortOpen(false), 150)}
               className="w-full sm:w-auto inline-flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-white border border-[#E8E5DF]
-                         text-sm text-[#1A1A1A] hover:border-[#0047FF]/40 transition-colors min-w-[180px]"
+                         text-sm text-[#1A1A1A] hover:border-[#0047FF]/40 transition-colors sm:min-w-[180px]"
             >
               <span className="inline-flex items-center gap-2">
                 <ArrowUpDown className="w-4 h-4 text-[#8A8A8A]" />

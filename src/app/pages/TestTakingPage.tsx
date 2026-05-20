@@ -465,17 +465,18 @@ function Quiz({ questions, mode, onFinish }: {
 
       {/* Question navigator panel */}
       {showNavigator && (
-        <div className="bg-white border border-[#E8E5DF] rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="bg-white border border-[#E8E5DF] rounded-2xl p-3 sm:p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="text-sm font-semibold text-[#1A1A1A]">Все вопросы</div>
-            <div className="flex items-center gap-3 text-[11px] text-[#6B6B6B]">
+            <div className="flex items-center gap-x-3 gap-y-1 text-[11px] text-[#6B6B6B] flex-wrap">
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Верно</span>
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-500" /> Неверно</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#0047FF]" /> Текущий</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-[#0047FF]" /> Сейчас</span>
               <span className="inline-flex items-center gap-1"><Flag className="w-2.5 h-2.5 text-amber-500" /> Отмечен</span>
             </div>
           </div>
-          <div className="grid grid-cols-8 sm:grid-cols-12 md:grid-cols-15 lg:grid-cols-20 gap-1.5">
+          {/* Grid: 6 на узком mobile, 10 на больших mobile, 12 sm+, 16 md+, 20 lg+ */}
+          <div className="grid grid-cols-6 min-[400px]:grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-16 xl:grid-cols-20 gap-1.5">
             {questions.map((qq, i) => {
               const isAnswered = !!(answers[i] && answers[i]!.length > 0);
               const isQChecked = checked[i];
@@ -494,7 +495,7 @@ function Quiz({ questions, mode, onFinish }: {
                 <button
                   key={i}
                   onClick={() => setCurrent(i)}
-                  className={`relative w-9 h-9 rounded-lg border text-xs font-bold transition-all hover:scale-105 ${bgClass}`}
+                  className={`relative aspect-square min-h-[40px] rounded-lg border text-xs font-bold transition-all hover:scale-105 active:scale-95 ${bgClass}`}
                   title={`Вопрос ${i + 1}`}
                 >
                   {i + 1}
@@ -542,7 +543,7 @@ function Quiz({ questions, mode, onFinish }: {
           <div className="flex-1" />
           <button
             onClick={toggleMark}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors min-h-[32px] ${
               isMarked
                 ? "bg-amber-100 text-amber-700"
                 : "bg-[#F0EEE9] text-[#8A8A8A] hover:bg-amber-50 hover:text-amber-600"
@@ -550,7 +551,7 @@ function Quiz({ questions, mode, onFinish }: {
             title="Отметить для повторения (M)"
           >
             <Flag className={`w-3.5 h-3.5 ${isMarked ? "fill-amber-500" : ""}`} />
-            {isMarked ? "Отмечено" : "Отметить"}
+            <span className="hidden sm:inline">{isMarked ? "Отмечено" : "Отметить"}</span>
           </button>
         </div>
         <p className="text-[15px] font-semibold text-[#0A0A0A] leading-relaxed mb-5">{q.question}</p>

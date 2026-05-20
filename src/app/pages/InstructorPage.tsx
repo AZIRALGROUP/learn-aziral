@@ -467,19 +467,21 @@ export function InstructorPage() {
           <div className="mt-8 bg-white border border-[#E8E5DF] rounded-2xl overflow-hidden">
             <div className="grid sm:grid-cols-5">
               {/* Left visual */}
-              <div className="sm:col-span-2 relative bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 p-6 flex items-center justify-center min-h-[160px]">
+              <div className="sm:col-span-2 relative bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 p-5 sm:p-6 flex items-center justify-center sm:min-h-[160px]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.15),transparent)] pointer-events-none" />
-                <div className="relative text-center text-white">
-                  <div className="w-14 h-14 mx-auto bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-3 shadow-lg">
-                    <GraduationCap className="w-7 h-7" />
+                <div className="relative flex sm:flex-col items-center sm:text-center text-white gap-3 sm:gap-0">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 sm:mx-auto bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center sm:mb-3 shadow-lg shrink-0">
+                    <GraduationCap className="w-6 h-6 sm:w-7 sm:h-7" />
                   </div>
-                  <p className="text-3xl font-bold leading-tight">80%</p>
-                  <p className="text-white/85 text-xs mt-1">с каждой продажи курса — вам</p>
+                  <div className="text-left sm:text-center">
+                    <p className="text-2xl sm:text-3xl font-bold leading-tight">80%</p>
+                    <p className="text-white/85 text-xs mt-0.5 sm:mt-1">с каждой продажи курса — вам</p>
+                  </div>
                 </div>
               </div>
 
               {/* Right content */}
-              <div className="sm:col-span-3 p-6 sm:p-7 flex flex-col gap-3">
+              <div className="sm:col-span-3 p-5 sm:p-7 flex flex-col gap-3">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1.5">Хотите больше?</p>
                   <h3 className="text-xl font-bold text-[#0A0A0A] leading-tight">Создавайте платные курсы и зарабатывайте</h3>
