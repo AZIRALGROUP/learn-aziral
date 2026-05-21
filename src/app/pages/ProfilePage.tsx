@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   User, Clock, CheckCircle2, AlertCircle, XCircle,
@@ -8,10 +8,12 @@ import {
   Bell, BellOff, CheckCheck,
   BookOpen, GraduationCap, Zap, Play, CreditCard, ShieldCheck,
   Camera, AtSign, Check, X as XIcon, Loader2,
+  ClipboardList, Plus, Pencil, Trash2, Globe, EyeOff, Hash, FileText, Sparkles, ArrowRight,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "react-i18next";
-import { authApi } from "../../api/client";
+import { authApi, testsApi } from "../../api/client";
+import type { TestSummary } from "../../api/client";
 
 type Notification = {
   id: number; lead_id: string | null; type: string;
@@ -30,14 +32,23 @@ export function ProfilePage() {
   const { user, logout, refetch } = useAuth();
   const { t } = useTranslation();
 
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"notifications" | "settings" | "courses">("courses");
+  const [tab, setTab] = useState<"notifications" | "settings" | "courses" | "tests">("tests");
 
   const [myCourses, setMyCourses] = useState<any[]>([]);
   const [userXp, setUserXp] = useState(0);
   const [instructorApp, setInstructorApp] = useState<any>(null);
+
+  // My tests (создание доступно всем залогиненным)
+  const [myTests, setMyTests] = useState<TestSummary[]>([]);
+  const [testsLoading, setTestsLoading] = useState(false);
+  const [creatingTest, setCreatingTest] = useState(false);
+  const [confirmDelTest, setConfirmDelTest] = useState<number | null>(null);
+  const [deletingTest, setDeletingTest] = useState<number | null>(null);
+  const [togglingTest, setTogglingTest] = useState<number | null>(null);
 
   // Settings
   const [notifEnabled, setNotifEnabled] = useState((user as any)?.notifications_enabled !== 0);
@@ -121,8 +132,45 @@ export function ProfilePage() {
 
   const creds = { credentials: 'include' as const };
 
+  // Load user's tests
+  const loadTests = async () => {
+    setTestsLoading(true);
+    try {
+      const data = await testsApi.myTests();
+      setMyTests(data);
+    } catch { /* ignore */ }
+    finally { setTestsLoading(false); }
+  };
+
+  const handleCreateTest = async () => {
+    if (creatingTest) return;
+    setCreatingTest(true);
+    try {
+      const t = await testsApi.create({ title: "Новый тест" });
+      navigate(`/instructor/tests/${t.id}/build`);
+    } catch { setCreatingTest(false); }
+  };
+
+  const handleDeleteTest = async (id: number) => {
+    setDeletingTest(id);
+    try {
+      await testsApi.delete(id);
+      setMyTests(prev => prev.filter(t => t.id !== id));
+      setConfirmDelTest(null);
+    } finally { setDeletingTest(null); }
+  };
+
+  const handleToggleTestPublish = async (test: TestSummary) => {
+    setTogglingTest(test.id);
+    try {
+      const res = await testsApi.togglePublish(test.id);
+      setMyTests(prev => prev.map(t => t.id === test.id ? { ...t, status: res.status } : t));
+    } finally { setTogglingTest(null); }
+  };
+
   useEffect(() => {
     if (!user) return;
+    loadTests();
     Promise.all([
       fetch("/api/profile/notifications", creds).then(r => r.ok ? r.json() : []),
       fetch("/api/profile/courses", creds).then(r => r.ok ? r.json() : []).then(setMyCourses),
@@ -222,18 +270,19 @@ export function ProfilePage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[
-            { label: "Курсов куплено",  value: myCourses.length,                                                   icon: GraduationCap, color: "text-blue-400" },
-            { label: "Завершено",       value: myCourses.filter(c => c.completed_lessons === c.total_lessons && c.total_lessons > 0).length, icon: CheckCircle2,  color: "text-green-400" },
-            { label: "XP",              value: userXp,                                                             icon: Zap,           color: "text-yellow-400" },
+            { label: "Тестов",   value: myTests.length, icon: ClipboardList, color: "text-purple-600",  bg: "bg-purple-500/10" },
+            { label: "Курсов",   value: myCourses.length, icon: GraduationCap, color: "text-[#0047FF]", bg: "bg-[#0047FF]/10" },
+            { label: "Завершено", value: myCourses.filter(c => c.completed_lessons === c.total_lessons && c.total_lessons > 0).length, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-500/10" },
+            { label: "XP",       value: userXp, icon: Zap, color: "text-amber-600", bg: "bg-amber-500/10" },
           ].map(s => (
             <div key={s.label} className="bg-[#F5F3EE] border border-[#E8E5DF] rounded-2xl p-4 lg:p-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#6B6B6B] text-xs lg:text-sm">{s.label}</span>
+              <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center mb-2`}>
                 <s.icon className={`w-4 h-4 ${s.color}`} />
               </div>
-              <div className="text-[#0A0A0A] text-2xl lg:text-3xl">{s.value}</div>
+              <div className="text-[#0A0A0A] text-2xl lg:text-3xl font-bold leading-tight">{s.value}</div>
+              <span className="text-[#6B6B6B] text-xs mt-0.5 block">{s.label}</span>
             </div>
           ))}
         </div>
@@ -241,13 +290,27 @@ export function ProfilePage() {
         {/* Tabs */}
         <div className="flex gap-2 mb-6 flex-wrap">
           <button
+            onClick={() => setTab("tests")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${tab === "tests" ? "bg-[#0047FF] text-white" : "bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
+          >
+            <ClipboardList className="w-4 h-4" /> Мои тесты
+            {myTests.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${tab === "tests" ? "bg-white/25 text-white" : "bg-[#E8E5DF] text-[#3A3A3A]"}`}>{myTests.length}</span>}
+          </button>
+          <button
+            onClick={() => setTab("courses")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${tab === "courses" ? "bg-[#0047FF] text-white" : "bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
+          >
+            <GraduationCap className="w-4 h-4" /> Мои курсы
+            {myCourses.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${tab === "courses" ? "bg-white/25 text-white" : "bg-[#E8E5DF] text-[#3A3A3A]"}`}>{myCourses.length}</span>}
+          </button>
+          <button
             onClick={() => { setTab("notifications"); }}
             className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${tab === "notifications" ? "bg-[#0047FF] text-white" : "bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
           >
             <Bell className="w-4 h-4" />
             Уведомления
             {unreadCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-[#0A0A0A] text-xs rounded-full flex items-center justify-center font-bold">
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -258,14 +321,137 @@ export function ProfilePage() {
           >
             <Settings className="w-4 h-4" /> {t("profile.settings")}
           </button>
-          <button
-            onClick={() => setTab("courses")}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${tab === "courses" ? "bg-[#0047FF] text-white" : "bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
-          >
-            <GraduationCap className="w-4 h-4" /> Мои курсы
-            {myCourses.length > 0 && <span className="bg-[#E8E5DF] text-[#0A0A0A] text-xs px-1.5 py-0.5 rounded-full">{myCourses.length}</span>}
-          </button>
         </div>
+
+        {/* Tests tab */}
+        {tab === "tests" && (
+          <div className="space-y-3">
+            {/* Header with create */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-lg font-bold text-[#0A0A0A]">Мои тесты</h2>
+                <p className="text-xs text-[#6B6B6B] mt-0.5">Создавайте тесты бесплатно — для учёбы или для друзей</p>
+              </div>
+              <button
+                onClick={handleCreateTest}
+                disabled={creatingTest}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0047FF] hover:bg-[#0038CC] active:scale-[0.97] disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-all shadow-sm shadow-[#0047FF]/20 shrink-0"
+              >
+                {creatingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Создать тест
+              </button>
+            </div>
+
+            {testsLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-7 h-7 border-2 border-[#0047FF] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : myTests.length === 0 ? (
+              /* Empty state */
+              <div className="relative overflow-hidden bg-gradient-to-br from-purple-600 via-purple-600 to-[#0047FF] rounded-2xl p-6 sm:p-8 text-white">
+                <div className="absolute top-0 right-0 w-56 h-56 bg-white/10 rounded-full -translate-y-1/3 translate-x-1/3 blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-pink-400/20 rounded-full translate-y-1/2 -translate-x-1/4 blur-2xl pointer-events-none" />
+                <div className="relative">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/15 backdrop-blur-sm rounded-full border border-white/20 mb-3">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Бесплатно</span>
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl font-bold mb-2 leading-tight">У вас пока нет тестов ✏️</h3>
+                  <p className="text-white/85 text-sm mb-5 max-w-md">
+                    Создайте свой первый тест за 2 минуты — добавьте вопросы или используйте AI-генерацию из темы.
+                  </p>
+                  <button
+                    onClick={handleCreateTest}
+                    disabled={creatingTest}
+                    className="group inline-flex items-center gap-2 px-5 py-3 bg-white text-purple-700 hover:bg-purple-50 active:scale-[0.98] disabled:opacity-60 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-black/10"
+                  >
+                    {creatingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Создать первый тест
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Tests list */
+              <div className="space-y-2.5">
+                {myTests.map(test => (
+                  <div key={test.id} className="group bg-white border border-[#E8E5DF] rounded-2xl p-3 sm:p-4 flex items-center gap-3 hover:border-[#0047FF]/30 hover:shadow-sm transition-all">
+                    <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                      test.status === "published" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                    }`}>
+                      <FileText className="w-5 h-5" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <Link to={`/instructor/tests/${test.id}/build`} className="block">
+                        <p className="text-[#0A0A0A] font-semibold text-sm truncate group-hover:text-[#0047FF] transition-colors">
+                          {test.title || "Без названия"}
+                        </p>
+                      </Link>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-[#8A8A8A] flex-wrap">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                          test.status === "published" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                        }`}>
+                          {test.status === "published" ? "✓ Опубликован" : "○ Черновик"}
+                        </span>
+                        {test.question_count !== undefined && (
+                          <span className="inline-flex items-center gap-1">
+                            <Hash className="w-3 h-3" />{test.question_count}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleToggleTestPublish(test)}
+                        disabled={togglingTest === test.id}
+                        title={test.status === "published" ? "Снять с публикации" : "Опубликовать"}
+                        className={`p-2 rounded-lg border transition-colors ${
+                          test.status === "published"
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                        }`}
+                      >
+                        {togglingTest === test.id ? <Loader2 className="w-4 h-4 animate-spin" /> : test.status === "published" ? <Globe className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </button>
+
+                      <Link
+                        to={`/instructor/tests/${test.id}/build`}
+                        className="p-2 rounded-lg text-[#6B6B6B] hover:text-[#0047FF] hover:bg-[#0047FF]/5 border border-[#E8E5DF] transition-colors"
+                        title="Редактировать"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Link>
+
+                      {confirmDelTest === test.id ? (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleDeleteTest(test.id)}
+                            disabled={deletingTest === test.id}
+                            className="px-2.5 py-1.5 text-xs bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-lg transition-colors font-medium"
+                          >
+                            {deletingTest === test.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Да"}
+                          </button>
+                          <button onClick={() => setConfirmDelTest(null)}
+                            className="px-2.5 py-1.5 text-xs bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] rounded-lg hover:bg-[#F0EEE9]">Нет</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDelTest(test.id)}
+                          className="p-2 rounded-lg text-[#C0B8B0] hover:text-red-500 hover:bg-red-50 border border-[#E8E5DF] transition-colors"
+                          title="Удалить"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Notifications tab */}
         {tab === "notifications" && (
