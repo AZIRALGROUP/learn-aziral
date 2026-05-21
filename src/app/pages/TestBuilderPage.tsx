@@ -8,6 +8,7 @@ import {
   Plus, Trash2, Upload, Eye, ArrowLeft, Globe, Save,
   FileJson, CheckCircle2, XCircle, GripVertical, Check, Loader2, Copy, Zap, Pencil,
   Monitor, ChevronLeft, ChevronRight, Shuffle, Table, Sparkles,
+  MoreVertical,
 } from "lucide-react";
 
 type QType = "single" | "multi" | "tf" | "order";
@@ -421,6 +422,7 @@ export function TestBuilderPage() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [status, setStatus] = useState<{ msg: string; isError?: boolean } | null>(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false); // mobile-only "More" меню
 
   // Editable test metadata
   const [title, setTitle] = useState("");
@@ -878,12 +880,22 @@ export function TestBuilderPage() {
   return (
     <div className="min-h-screen bg-[#F5F3EE]">
       {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-[#E8E5DF] flex items-center px-4 gap-3">
-        <button onClick={() => navigate("/instructor", { state: { tab: "tests" } })} className="p-2 rounded-lg hover:bg-[#F0EEE9] transition-colors" title="Мои тесты">
+      <div className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 bg-white border-b border-[#E8E5DF] flex items-center px-3 sm:px-4 gap-2 sm:gap-3">
+        {/* Back: на mobile если editor открыт — возвращает к списку, иначе к /instructor */}
+        <button
+          onClick={() => {
+            if (selectedIdx !== null && window.innerWidth < 768) {
+              setSelectedIdx(null);
+            } else {
+              navigate("/instructor", { state: { tab: "tests" } });
+            }
+          }}
+          className="p-2 rounded-lg hover:bg-[#F0EEE9] transition-colors shrink-0"
+          title="Назад">
           <ArrowLeft className="w-5 h-5 text-[#6B6B6B]" />
         </button>
         <div className="flex-1 flex items-center gap-1.5 min-w-0">
-          <span className="text-[15px] font-semibold text-[#0A0A0A] truncate">{title || "Новый тест"}</span>
+          <span className="text-sm sm:text-[15px] font-semibold text-[#0A0A0A] truncate">{title || "Новый тест"}</span>
           <button
             onClick={() => { setRenameValue(title); setShowRename(true); }}
             className="flex-shrink-0 p-1 rounded-md text-[#BFBFBF] hover:text-[#6B6B6B] hover:bg-[#F0EEE9] transition-colors"
@@ -892,48 +904,96 @@ export function TestBuilderPage() {
           </button>
         </div>
 
-        {/* Autosave indicator */}
+        {/* Autosave indicator (desktop only) */}
         <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#8A8A8A] min-w-[90px] justify-end">
           {saveState === "saving" && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Сохраняем…</>}
           {saveState === "saved" && <><Check className="w-3.5 h-3.5 text-green-600" /> Сохранено</>}
           {saveState === "error" && <span className="text-red-500">Ошибка</span>}
         </div>
 
-        {/* Draft + Publish buttons */}
-        <div className="flex items-center gap-2">
-          {/* Save as draft */}
-          <button onClick={saveDraft}
-            title="Сохранить изменения и оставить/перевести в черновик"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[#E8E5DF] bg-white text-[#6B6B6B] hover:bg-[#F5F3EE] hover:text-[#0A0A0A] transition-colors">
-            <Save className="w-3.5 h-3.5" /> В черновик
+        {/* Mobile autosave dot — компактный индикатор */}
+        <div className="sm:hidden">
+          {saveState === "saving" && <Loader2 className="w-4 h-4 animate-spin text-[#8A8A8A]" />}
+          {saveState === "saved" && <Check className="w-4 h-4 text-green-600" />}
+          {saveState === "error" && <XCircle className="w-4 h-4 text-red-500" />}
+        </div>
+
+        {/* Save as draft (desktop only — на mobile в More) */}
+        <button onClick={saveDraft}
+          title="Сохранить изменения и оставить/перевести в черновик"
+          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[#E8E5DF] bg-white text-[#6B6B6B] hover:bg-[#F5F3EE] hover:text-[#0A0A0A] transition-colors">
+          <Save className="w-3.5 h-3.5" /> В черновик
+        </button>
+
+        {/* Publish / Published toggle — всегда видна */}
+        {test.status === "published" ? (
+          <button onClick={togglePublish}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition-colors border border-green-200 shrink-0"
+            title="Тест опубликован — нажмите чтобы снять с публикации">
+            <Eye className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Опубликован</span>
           </button>
-          {/* Publish / Published toggle */}
-          {test.status === "published" ? (
-            <button onClick={togglePublish}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition-colors border border-green-200"
-              title="Тест опубликован — нажмите чтобы снять с публикации">
-              <Eye className="w-3.5 h-3.5" /> Опубликован
-            </button>
-          ) : (
-            <button onClick={togglePublish}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0047FF] text-white hover:bg-[#0038CC] transition-colors shadow-sm shadow-[#0047FF]/20"
-              title="Опубликовать — тест появится на странице /study">
-              <Globe className="w-3.5 h-3.5" /> Опубликовать
-            </button>
+        ) : (
+          <button onClick={togglePublish}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0047FF] text-white hover:bg-[#0038CC] transition-colors shadow-sm shadow-[#0047FF]/20 shrink-0"
+            title="Опубликовать — тест появится на странице /study">
+            <Globe className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Опубликовать</span>
+          </button>
+        )}
+
+        {/* Secondary buttons — на desktop inline, на mobile в More dropdown */}
+        <div className="hidden md:flex items-center gap-2">
+          <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F0EEE9] text-xs font-medium text-[#6B6B6B] hover:bg-[#E8E5DF] transition-colors" title="Импорт вопросов из JSON">
+            <FileJson className="w-3.5 h-3.5" /> Импорт
+          </button>
+          <button onClick={() => setShowQuickInput(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200" title="Быстрый текстовый ввод вопросов">
+            <Zap className="w-3.5 h-3.5" /> Быстрый ввод
+          </button>
+          <button onClick={() => setShowAiGen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors border border-purple-200" title="Сгенерировать вопросы с помощью AI">
+            <Sparkles className="w-3.5 h-3.5" /> AI генерация
+          </button>
+          <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EEF2FF] text-xs font-medium text-[#4F46E5] hover:bg-[#E0E7FF] transition-colors border border-[#C7D2FE]" title="Предпросмотр — посмотреть глазами студента">
+            <Monitor className="w-3.5 h-3.5" /> Предпросмотр
+          </button>
+        </div>
+
+        {/* Mobile More menu */}
+        <div className="md:hidden relative shrink-0">
+          <button
+            onClick={() => setMoreMenuOpen(v => !v)}
+            onBlur={() => setTimeout(() => setMoreMenuOpen(false), 200)}
+            className="p-2 rounded-lg hover:bg-[#F0EEE9] transition-colors"
+            aria-label="Ещё">
+            <MoreVertical className="w-5 h-5 text-[#6B6B6B]" />
+          </button>
+          {moreMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#E8E5DF] rounded-2xl shadow-lg shadow-black/10 overflow-hidden py-1 z-50">
+              <button onMouseDown={() => { saveDraft(); setMoreMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[#3A3A3A] hover:bg-[#F5F3EE]">
+                <Save className="w-4 h-4 text-[#6B6B6B]" /> В черновик
+              </button>
+              <div className="my-1 border-t border-[#F0EEE9]" />
+              <button onMouseDown={() => { setShowImport(true); setMoreMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[#3A3A3A] hover:bg-[#F5F3EE]">
+                <FileJson className="w-4 h-4 text-[#6B6B6B]" /> Импорт JSON
+              </button>
+              <button onMouseDown={() => { setShowQuickInput(true); setMoreMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[#3A3A3A] hover:bg-[#F5F3EE]">
+                <Zap className="w-4 h-4 text-amber-600" /> Быстрый ввод
+              </button>
+              <button onMouseDown={() => { setShowAiGen(true); setMoreMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[#3A3A3A] hover:bg-[#F5F3EE]">
+                <Sparkles className="w-4 h-4 text-purple-600" /> AI генерация
+              </button>
+              <div className="my-1 border-t border-[#F0EEE9]" />
+              <button onMouseDown={() => { setShowPreview(true); setMoreMenuOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-[#3A3A3A] hover:bg-[#F5F3EE]">
+                <Monitor className="w-4 h-4 text-[#4F46E5]" /> Предпросмотр
+              </button>
+            </div>
           )}
         </div>
-        <button onClick={() => setShowImport(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F0EEE9] text-xs font-medium text-[#6B6B6B] hover:bg-[#E8E5DF] transition-colors" title="Импорт вопросов из JSON">
-          <FileJson className="w-3.5 h-3.5" /> Импорт
-        </button>
-        <button onClick={() => setShowQuickInput(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200" title="Быстрый текстовый ввод вопросов">
-          <Zap className="w-3.5 h-3.5" /> Быстрый ввод
-        </button>
-        <button onClick={() => setShowAiGen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-xs font-medium text-purple-700 hover:bg-purple-100 transition-colors border border-purple-200" title="Сгенерировать вопросы с помощью AI">
-          <Sparkles className="w-3.5 h-3.5" /> AI генерация
-        </button>
-        <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EEF2FF] text-xs font-medium text-[#4F46E5] hover:bg-[#E0E7FF] transition-colors border border-[#C7D2FE]" title="Предпросмотр — посмотреть глазами студента">
-          <Monitor className="w-3.5 h-3.5" /> Предпросмотр
-        </button>
       </div>
 
       {/* Status toast */}
@@ -945,10 +1005,12 @@ export function TestBuilderPage() {
         </div>
       )}
 
-      {/* Main */}
-      <div className="flex pt-16" style={{ minHeight: "calc(100vh - 0px)" }}>
-        {/* Left: question list */}
-        <div className="w-72 shrink-0 bg-white border-r border-[#E8E5DF] flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+      {/* Main — на mobile drilldown (list ИЛИ editor), на desktop два panel */}
+      <div className="flex pt-14 sm:pt-16 min-h-screen">
+        {/* Left: question list (на mobile показывается ТОЛЬКО когда нет выбранного вопроса) */}
+        <div className={`w-full md:w-72 md:shrink-0 bg-white md:border-r border-[#E8E5DF] flex-col ${
+          selectedIdx === null ? "flex" : "hidden md:flex"
+        }`} style={{ height: "calc(100vh - 56px)" }}>
           <div className="p-3 border-b border-[#E8E5DF] shrink-0">
             <div className="text-xs text-[#8A8A8A] font-medium mb-2">Описание</div>
             <textarea value={description} onChange={e => setDescription(e.target.value)}
@@ -972,7 +1034,7 @@ export function TestBuilderPage() {
             )}
             {questions.map((qq, i) => (
               <button key={qq.id} onClick={() => setSelectedIdx(i)}
-                className={`w-full flex items-start gap-2 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                className={`w-full flex items-start gap-2 px-3 py-3 rounded-lg text-left transition-colors min-h-[52px] ${
                   selectedIdx === i ? "bg-[#0047FF]/8 text-[#0047FF]" : "hover:bg-[#F5F3EE] text-[#3A3A3A]"
                 }`}>
                 <span className="text-xs font-bold mt-0.5 shrink-0">{i + 1}</span>
@@ -980,20 +1042,32 @@ export function TestBuilderPage() {
                   <div className="text-xs truncate">{qq.question || <span className="text-[#B0B0B0] italic">без текста</span>}</div>
                   <div className="text-[10px] text-[#8A8A8A] mt-0.5">{TYPE_LABELS[qq.type as QType]}</div>
                 </div>
+                <ChevronRight className="md:hidden w-4 h-4 text-[#A0A0A0] shrink-0 mt-1" />
               </button>
             ))}
           </div>
 
           <div className="p-2 border-t border-[#E8E5DF] shrink-0">
             <button onClick={addQuestion}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-[#0047FF] text-white text-xs font-medium hover:bg-[#0038CC] transition-colors">
-              <Plus className="w-3.5 h-3.5" /> Добавить вопрос
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-[#0047FF] text-white text-sm font-medium hover:bg-[#0038CC] transition-colors">
+              <Plus className="w-4 h-4" /> Добавить вопрос
             </button>
           </div>
         </div>
 
-        {/* Right: editor */}
-        <div className="flex-1 overflow-y-auto p-6" style={{ height: "calc(100vh - 64px)" }}>
+        {/* Right: editor (на mobile показывается ТОЛЬКО когда есть выбранный вопрос) */}
+        <div className={`flex-1 overflow-y-auto p-4 sm:p-6 ${
+          selectedIdx === null ? "hidden md:block" : "block"
+        }`} style={{ height: "calc(100vh - 56px)" }}>
+          {/* Mobile-only "← к списку" сверху редактора */}
+          {selectedIdx !== null && (
+            <button
+              onClick={() => setSelectedIdx(null)}
+              className="md:hidden inline-flex items-center gap-1.5 px-3 py-2 mb-4 -ml-1 rounded-lg text-sm text-[#6B6B6B] hover:text-[#0047FF] hover:bg-[#0047FF]/5 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> К списку вопросов
+            </button>
+          )}
           {q ? (
             <div className="max-w-2xl space-y-5">
               {/* Header */}
