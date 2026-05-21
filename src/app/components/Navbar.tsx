@@ -5,6 +5,7 @@ import {
   Menu, X, ClipboardList, ExternalLink,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const MAIN_SITE = import.meta.env.VITE_MAIN_SITE_URL || "https://aziral.com";
 
@@ -109,8 +110,13 @@ export function Navbar() {
           </a>
         </nav>
 
-        {/* Right: auth + mobile menu button */}
-        <div className="flex items-center gap-2">
+        {/* Right: language + auth + mobile menu button */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Language switcher (desktop only — на mobile вынесен в sheet) */}
+          <div className="hidden md:block">
+            <LanguageSwitcher variant="icon" />
+          </div>
+
           {/* Auth */}
           {user ? (
             <div className="relative" ref={dropdownRef}>
@@ -249,6 +255,11 @@ export function Navbar() {
                   <p className="text-xs text-[#8A8A8A] truncate">Главный сайт</p>
                 </div>
               </a>
+
+              {/* Language switcher — отдельный блок снизу */}
+              <div className="pt-2 mt-2 border-t border-[#F0EEE9]">
+                <LanguageSwitcher variant="full" />
+              </div>
             </nav>
           </div>
         </>
