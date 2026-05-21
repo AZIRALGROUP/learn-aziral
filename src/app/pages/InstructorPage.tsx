@@ -254,7 +254,7 @@ export function InstructorPage() {
     const hasApplyInProgress = applyStatus && applyStatus !== "rejected";
 
     return (
-      <div className="min-h-screen bg-[#F5F3EE] pt-24 pb-20">
+      <div className="min-h-screen bg-[#F5F3EE] pt-20 sm:pt-24 pb-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
 
           {/* Header */}
@@ -513,7 +513,7 @@ export function InstructorPage() {
   //   APPLY PAGE — открывается по кнопке "Стать инструктором"
   // ═══════════════════════════════════════════════════════════
   if (!isInstructor && showApply) return (
-    <div className="min-h-screen bg-[#F5F3EE] pt-24 pb-20">
+    <div className="min-h-screen bg-[#F5F3EE] pt-20 sm:pt-24 pb-20">
       <div className="max-w-2xl mx-auto px-4 sm:px-6">
 
         {/* Back button */}
@@ -752,7 +752,7 @@ export function InstructorPage() {
   const isPartiallyStarted = !loading && !isCompletelyNew && (courses.length === 0 || tests.length === 0);
 
   return (
-    <div className="min-h-screen bg-[#F5F3EE] pt-24 pb-20">
+    <div className="min-h-screen bg-[#F5F3EE] pt-20 sm:pt-24 pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header */}

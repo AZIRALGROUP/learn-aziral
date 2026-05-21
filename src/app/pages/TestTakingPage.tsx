@@ -760,7 +760,7 @@ export function TestTakingPage() {
 
   return (
     <div className="min-h-screen bg-[#F5F3EE]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-28 pb-16">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-16">
         {/* breadcrumb */}
         <div className="mb-6">
           <Link to="/study" className="inline-flex items-center gap-1.5 text-sm text-[#6B6B6B] hover:text-[#0047FF] transition-colors">
