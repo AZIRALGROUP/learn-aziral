@@ -74,7 +74,8 @@ function AppRoutes() {
           <Route path="/profile"                         element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/study"                           element={<StudyPage />} />
           <Route path="/study/:id"                      element={<TestTakingPage />} />
-          <Route path="/instructor/tests/:id/build"     element={<ProtectedRoute requireRole="instructor"><TestBuilderPage /></ProtectedRoute>} />
+          {/* Тесты доступны всем залогиненным (без requireRole) — backend проверяет ownership */}
+          <Route path="/instructor/tests/:id/build"     element={<ProtectedRoute><TestBuilderPage /></ProtectedRoute>} />
           <Route path="/courses"                        element={<Navigate to="/" replace />} />
           <Route path="/login"                          element={<ExternalRedirect to={MAIN_SITE + '/login'} />} />
           <Route path="/register"                       element={<ExternalRedirect to={MAIN_SITE + '/register'} />} />
