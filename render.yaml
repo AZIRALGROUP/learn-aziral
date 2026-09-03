@@ -1,0 +1,41 @@
+services:
+  # ── Learning platform (learn.aziral.com) ──────────────────────────────────
+  # The API lives in the AZIRAL-group repo and is deployed separately as
+  # `aziral-api`. It is reached through the rewrite below, which keeps the
+  # `.aziral.com` auth cookie first-party.
+  - type: web
+    name: learn-aziral
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    domains:
+      - learn.aziral.com
+    envVars:
+      - key: VITE_MAIN_SITE_URL
+        value: https://aziral.com
+      - key: VITE_PAYMENT_PHONE
+        sync: false
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://api.aziral.com/api/*
+      # SPA fallback — must stay last.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
