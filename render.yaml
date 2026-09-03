@@ -18,7 +18,7 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://api.aziral.com/api/*
+        destination: https://aziral-api.onrender.com/api/*
       # SPA fallback — must stay last.
       - type: rewrite
         source: /*
