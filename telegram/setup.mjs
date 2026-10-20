@@ -21,14 +21,9 @@ if (process.argv.includes('--profile-photo')) {
   await telegramCall(env, 'setMyProfilePhoto', payload);
 }
 await telegramCall(env, 'setMyCommands', { commands: [
-  { command: 'start', description: 'Главное меню' },
-  { command: 'learn', description: 'Открыть приложение' },
-  { command: 'tests', description: 'Пройти тест' },
-  { command: 'courses', description: 'Курсы и уроки' },
+  { command: 'start', description: 'Открыть Learn' },
   { command: 'duel', description: 'Дуэль с другом' },
-  { command: 'newtest', description: 'Создать тест с ИИ' },
-  { command: 'progress', description: 'Мой прогресс' },
-  { command: 'help', description: 'Как пользоваться ботом' },
+  { command: 'help', description: 'Помощь и добавление в группу' },
 ] });
 await telegramCall(env, 'setChatMenuButton', { menu_button: { type: 'web_app', text: 'Учиться', web_app: { url: url.href } } });
 if (process.argv.includes('--webhook')) {

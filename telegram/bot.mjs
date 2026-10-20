@@ -39,14 +39,14 @@ export async function processUpdate(db, env, update, now = Date.now(), call = te
     const messages = botMessages(env.TELEGRAM_BOT_USERNAME);
     const copyName = name === 'start' ? ({ profile: 'progress', tests: 'tests', courses: 'courses', newtest: 'newtest' }[param] || 'start') : name;
     let message = messages[copyName] || messages.start;
-    if (param.startsWith('duel_')) message = 'Тебя ждут в дуэли.\nВходи: до 10 вопросов, по 15 секунд.';
+    if (param.startsWith('duel_')) message = 'Друг зовёт на дуэль.\nДо 10 вопросов, по 15 секунд на ответ.';
     if (name === 'duel') {
       if (argument) {
         try {
           const site = createSiteClient(env);
           const sourceTest = site && (isSiteId(argument) || isLessonId(argument)) ? await site.test(userId, argument) : null;
           param = 'duel_' + createDuel(db, argument, userId, now, sourceTest);
-          message = 'Дуэль готова.\nОтправь приглашение другу. Старт — когда вас двое; до 10 вопросов по 15 секунд.';
+          message = 'Дуэль готова.\nОткрой её и отправь приглашение другу.';
         }
         catch (e) { message = e instanceof ApiError ? e.message : 'Не удалось создать дуэль'; param = 'duels'; }
       } else { message = 'Выбери тест → «Создать дуэль» → отправь ссылку другу.'; param = 'duels'; }
@@ -58,19 +58,10 @@ export async function processUpdate(db, env, update, now = Date.now(), call = te
     };
     const labels = { tests: 'Выбрать тест', courses: 'Открыть курсы', duels: 'Создать дуэль', profile: 'Мой прогресс', newtest: 'Создать с ИИ' };
     let keyboard;
-    const groupButton = { text: 'В группу', url: `https://t.me/${env.TELEGRAM_BOT_USERNAME}?startgroup=learn` };
     if (param.startsWith('duel_')) keyboard = [[button('Войти в дуэль', param)]];
-    else if (labels[param]) {
-      const shortcuts = param === 'tests' ? [['Создать с ИИ','newtest'],['Дуэль','duels']] : param === 'newtest' ? [['Тесты','tests'],['Курсы','courses']] : [['Тесты','tests'],['Создать с ИИ','newtest']];
-      keyboard = [[button(labels[param], param)], shortcuts.map(([label, destination]) => button(label, destination)), [button(param === 'profile' ? 'Дуэль' : 'Мой прогресс', param === 'profile' ? 'duels' : 'profile')]];
-      if (m.chat.type === 'private') keyboard[2].push(groupButton);
-    } else {
-      keyboard = [
-        [button('Тесты','tests'),button('Курсы','courses')],
-        [button('Создать с ИИ','newtest'),button('Дуэль','duels')],
-        [button('Мой прогресс','profile')],
-      ];
-      if (m.chat.type === 'private') keyboard[2].push(groupButton);
+    else keyboard = [[button(labels[param] || 'Открыть Learn', labels[param] ? param : '')]];
+    if (name === 'help' && m.chat.type === 'private' && env.TELEGRAM_BOT_USERNAME) {
+      keyboard.push([{ text: 'Добавить в группу', url: `https://t.me/${env.TELEGRAM_BOT_USERNAME}?startgroup=learn` }]);
     }
     const payload = JSON.stringify({ chat_id: m.chat.id, text: message, reply_markup: { inline_keyboard: keyboard } });
     db.prepare('INSERT OR IGNORE INTO bot_updates (id,payload) VALUES (?,?)').run(update.update_id, payload);

@@ -267,7 +267,7 @@ test('saved paid lesson snapshots and answer reviews recheck entitlement on resu
   assert.equal((await req(1, `/attempts/${a.id}/retry`, 'POST', { mode: 'all' })).status, 403);
 });
 
-test('bot offers direct useful menus and private help while ignoring ordinary group conversation', async () => {
+test('bot keeps one main action, preserves section links and shows group setup only in private help', async () => {
   const db = openStore(':memory:');
   try {
     const env = { TELEGRAM_BOT_USERNAME: 'TestLearnBot', MINI_APP_URL: 'https://example.com/telegram' };
@@ -276,17 +276,28 @@ test('bot offers direct useful menus and private help while ignoring ordinary gr
     await processUpdate(db, env, { update_id: 20, message }, Date.now(), call);
     assert.equal(sent[0].reply_markup.inline_keyboard[0][0].web_app.url, 'https://example.com/telegram?start=profile');
     const buttons = sent[0].reply_markup.inline_keyboard.flat();
-    assert.ok(buttons.some(b => b.web_app?.url.endsWith('start=newtest')));
-    assert.ok(buttons.some(b => b.url?.includes('startgroup=learn')));
+    assert.equal(buttons.length, 1);
     await processUpdate(db, env, { update_id: 21, message: { ...message, text: 'Как учиться?' } }, Date.now(), call);
     assert.match(sent[1].text, /Как пользоваться/);
+    assert.equal(sent[1].reply_markup.inline_keyboard.flat().length, 2);
+    assert.equal(sent[1].reply_markup.inline_keyboard[1][0].url, 'https://t.me/TestLearnBot?startgroup=learn');
     await processUpdate(db, env, { update_id: 22, message: { ...message, chat: { id: -100, type: 'supergroup' }, text: 'Привет всем!' } }, Date.now(), call);
     assert.equal(sent.length, 2);
     await processUpdate(db, env, { update_id: 23, message: { ...message, text: '/start' } }, Date.now(), call);
     const menu = sent[2].reply_markup.inline_keyboard;
-    assert.equal(menu.length, 3); assert.equal(menu.flat().length, 6);
+    assert.equal(menu.length, 1); assert.equal(menu.flat().length, 1);
     assert.ok(sent[2].text.length < 100);
-    assert.equal(new Set(menu.flat().map(b => b.web_app?.url || b.url)).size, 6);
+    assert.equal(menu[0][0].web_app.url, env.MINI_APP_URL);
+    for (const [i, [command, destination]] of [['tests', 'tests'], ['courses', 'courses'], ['newtest', 'newtest'], ['duel', 'duels'], ['start newtest', 'newtest']].entries()) {
+      await processUpdate(db, env, { update_id: 24 + i, message: { ...message, text: '/' + command } }, Date.now(), call);
+      const actions = sent.at(-1).reply_markup.inline_keyboard.flat();
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].web_app.url, env.MINI_APP_URL + '?start=' + destination);
+    }
+    await processUpdate(db, env, { update_id: 30, message: { ...message, chat: { id: -100, type: 'supergroup' }, text: '/help@TestLearnBot' } }, Date.now(), call);
+    const groupActions = sent.at(-1).reply_markup.inline_keyboard.flat();
+    assert.equal(groupActions.length, 1);
+    assert.equal(groupActions[0].url, 'https://t.me/TestLearnBot?start=home');
   } finally { db.close(); }
 });
 
