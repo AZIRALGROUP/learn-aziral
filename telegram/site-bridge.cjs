@@ -51,7 +51,8 @@ module.exports = function createLearnBridge({ db, secret = process.env.LEARN_BRI
           const target = db.prepare('SELECT id,name,banned,telegram_id FROM users WHERE id=?').get(input.siteUserId);
           if (!target || target.banned) fail(403, 'Аккаунт недоступен');
           if ((user && user.id !== target.id) || (target.telegram_id && String(target.telegram_id) !== tgId)) fail(409, 'Аккаунт уже связан с другим Telegram. Изменить привязку можно в профиле сайта');
-          db.prepare('UPDATE users SET telegram_id=? WHERE id=?').run(tgId, target.id);
+          const saved = db.prepare("UPDATE users SET telegram_id=? WHERE id=? AND (telegram_id IS NULL OR telegram_id='' OR telegram_id=?) AND NOT EXISTS (SELECT 1 FROM users WHERE telegram_id=? AND id<>?)").run(tgId,target.id,tgId,tgId,target.id);
+          if (!saved.changes) fail(409, 'Аккаунт уже связан с другим профилем. Обновите страницу');
           return { linked: true, user: { id: target.id, name: target.name } };
         })();
       } else if (req.method === 'GET' && path === '/catalog') {

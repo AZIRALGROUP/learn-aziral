@@ -139,3 +139,28 @@ test('legacy test import is idempotent and account links cannot replace an exist
   assert.equal((await site.account('444')).user.name,'New account');
   assert.equal((await site.linkAccount('444',10)).linked,true);
 });
+
+test('overlapping connection requests cannot bind the same Telegram to two website accounts',async t=>{
+  const {db,base,secret}=await fixture(t);
+  db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?)').run(10,'One','user',0,null,'PASSWORD');
+  db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?)').run(11,'Two','user',0,null,'PASSWORD');
+  const prepare=db.prepare.bind(db);let observed;
+  const lookup=new Promise(resolve=>{observed=resolve;});
+  db.prepare=sql=>{
+    const statement=prepare(sql);
+    if(sql==='SELECT id,name,role,banned FROM users WHERE telegram_id = ?') {
+      const get=statement.get.bind(statement);
+      statement.get=(...args)=>{const row=get(...args);observed();return row;};
+    }
+    return statement;
+  };
+  let writer;
+  const body=new ReadableStream({start(controller){writer=controller;controller.enqueue(new TextEncoder().encode('{"siteUserId":'));}});
+  const headers={'x-learn-bridge-secret':secret,'x-learn-telegram-id':'444','content-type':'application/json'};
+  const delayed=fetch(base+'/account/link',{method:'POST',headers,body,duplex:'half'});
+  await lookup;
+  assert.equal((await fetch(base+'/account/link',{method:'POST',headers,body:JSON.stringify({siteUserId:11})})).status,200);
+  writer.enqueue(new TextEncoder().encode('10}'));writer.close();
+  assert.equal((await delayed).status,409);
+  assert.deepEqual(db.prepare('SELECT id FROM users WHERE telegram_id=?').all('444').map(r=>r.id),[11]);
+});
