@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useAuth } from '../contexts/AuthContext';
+import { SharedTrainingPage } from '../../learning/SharedLearning';
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { testsApi } from "../../api/client";
@@ -710,30 +712,34 @@ function Quiz({ questions, mode, onFinish }: {
    TestTakingPage
 ══════════════════════════════════════════════════════════ */
 export function TestTakingPage() {
+  const {user,loading}=useAuth();const {id}=useParams();
+  if(loading)return <p role="status">Загружаем аккаунт…</p>;
+  return user?<SharedTrainingPage testKey={'site-'+id}/>:<GuestTestTakingPage key={id}/>;
+}
+
+function GuestTestTakingPage() {
   const { id } = useParams<{ id: string }>();
   const [test, setTest] = useState<TestWithQuestions | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [config, setConfig] = useState<{ mode: Mode; shuffle: boolean } | null>(null);
+  const [config, setConfig] = useState<{ mode: Mode; shuffle: boolean; questions: TestQuestion[] } | null>(null);
 
   usePageTitle(test ? `${test.title} — AZIRAL Learn` : "Тест — AZIRAL Learn");
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
     testsApi.get(id)
       .then(setTest)
       .catch(e => setError(e instanceof Error ? e.message : "Не удалось загрузить тест"))
       .finally(() => setLoading(false));
   }, [id]);
 
-  const shuffledQuestions = useMemo(() => {
-    if (!test || !config) return [];
-    if (!config.shuffle) return test.questions;
-    return [...test.questions].sort(() => Math.random() - 0.5);
-  }, [test, config]);
-
-  const handleStart = (m: Mode, shuffle: boolean) => setConfig({ mode: m, shuffle });
+  const shuffledQuestions = config?.questions || [];
+  const handleStart = (m: Mode, shuffle: boolean) => {
+    const questions=[...(test?.questions||[])];
+    if(shuffle)for(let i=questions.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[questions[i],questions[j]]=[questions[j],questions[i]];}
+    setConfig({mode:m,shuffle,questions});
+  };
   const handleFinish = () => setConfig(null);
 
   if (loading) {
@@ -761,6 +767,7 @@ export function TestTakingPage() {
   return (
     <div className="min-h-screen bg-[#F5F3EE]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-20 sm:pt-28 pb-16">
+        <p className="mb-4 text-sm text-[#586174]">Гостевой режим. <a className="text-[#0047FF] underline" href={'https://aziral.com/login?redirect='+encodeURIComponent(window.location.href)}>Войдите</a>, чтобы сохранять историю и продолжать в Telegram.</p>
         {/* breadcrumb */}
         <div className="mb-6">
           <Link to="/study" className="inline-flex items-center gap-1.5 text-sm text-[#6B6B6B] hover:text-[#0047FF] transition-colors">

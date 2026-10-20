@@ -24,6 +24,10 @@ export function openStore(filename = 'telegram/data/learn.sqlite') {
     CREATE TABLE IF NOT EXISTS account_links (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS site_test_links (local_id TEXT PRIMARY KEY REFERENCES tests(id), site_id TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS duel_messages (duel_id TEXT PRIMARY KEY REFERENCES duels(id), message_id TEXT NOT NULL, expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS learning_transfers (attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,user_id TEXT NOT NULL,payload TEXT NOT NULL,shared_id TEXT);
+    CREATE TABLE IF NOT EXISTS learning_progress_exports (user_id TEXT NOT NULL,course_id TEXT NOT NULL,lesson INTEGER NOT NULL,PRIMARY KEY(user_id,course_id,lesson));
+    CREATE TABLE IF NOT EXISTS learning_course_exports (user_id TEXT NOT NULL,course_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(user_id,course_id));
+    CREATE TABLE IF NOT EXISTS learning_duel_exports (user_id TEXT NOT NULL,duel_id TEXT NOT NULL,PRIMARY KEY(user_id,duel_id));
   `);
   return db;
 }

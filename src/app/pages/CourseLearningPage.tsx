@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useParams, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -164,13 +164,16 @@ export function CourseLearningPage() {
 
   // Quiz state
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [quizResult, setQuizResult] = useState<any>(null);
+  const quizRequestId = useRef(crypto.randomUUID());
+  useEffect(()=>{if(current?.completed){setCompleted(true);setShowQuiz(true);}},[current?.completed]);
+  const [quizResult, setQuizResult] = useState<{results:Record<number,{correct:boolean;correctIndex:number;xpEarned:number}>;totalXp:number;allCorrect:boolean}|null>(null);
   const [submittingQuiz, setSubmittingQuiz] = useState(false);
   const [quizError, setQuizError] = useState<string | null>(null);
   const [showQuiz, setShowQuiz] = useState(false);
   const [lessonError, setLessonError] = useState<string | null>(null);
 
   const loadLesson = async (lId: number) => {
+    quizRequestId.current=crypto.randomUUID();
     setLoadingLesson(true); setQuizResult(null); setAnswers({}); setShowQuiz(false); setCompleted(false); setLessonError(null);
     try {
       const r = await fetch(`/api/lessons/${lId}`, { credentials: 'include' });
@@ -222,6 +225,17 @@ export function CourseLearningPage() {
     return () => { cancelled = true; };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(()=>{
+    if(!id)return;const c=new AbortController();let running=false;
+    const refresh=async()=>{if(running||document.visibilityState==='hidden')return;running=true;try{
+      const [r,x]=await Promise.all([fetch(`/api/courses/${id}/lessons`,{credentials:'include',signal:c.signal}),fetch('/api/profile/xp',{credentials:'include',signal:c.signal})]);
+      if(r.ok){const rows:Lesson[]=await r.json();if(!c.signal.aborted){setLessons(rows);setCurrent(current=>{if(!current)return current;const saved=rows.find(l=>l.id===current.id)?.completed;return saved?{...current,completed:1}:current;});}}
+      if(x.ok){const v=await x.json();if(!c.signal.aborted)setTotalXp(v.xp);}
+    }catch{/* Keep the displayed lesson and unsaved quiz choices on connection failure. */}finally{running=false;}};
+    const focus=()=>void refresh();const timer=setInterval(focus,15000);window.addEventListener('focus',focus);document.addEventListener('visibilitychange',focus);
+    return()=>{c.abort();clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);};
+  },[id]);
+
   const handleComplete = async () => {
     if (!current || completing) return;
     setCompleting(true);
@@ -232,7 +246,7 @@ export function CourseLearningPage() {
         setCompleted(true);
         setShowQuiz(true);
         if (d.xp > 0) {
-          setXpGained(d.xp); setTotalXp(p => p + d.xp);
+          setXpGained(d.xp); void fetch('/api/profile/xp',{credentials:'include'}).then(r=>r.json()).then(v=>setTotalXp(v.xp)).catch(()=>{});
           setShowXpPop(true); setTimeout(() => setShowXpPop(false), 2500);
         }
         setLessons(prev => prev.map(l => l.id === current.id ? { ...l, completed: 1 } : l));
@@ -254,13 +268,13 @@ export function CourseLearningPage() {
     try {
       const r = await fetch(`/api/lessons/${current.id}/quiz/submit`, {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, requestId:quizRequestId.current }),
       });
       if (r.ok) {
         const d = await r.json();
         setQuizResult(d);
         if (d.totalXp > 0) {
-          setTotalXp(p => p + d.totalXp);
+          void fetch('/api/profile/xp',{credentials:'include'}).then(r=>r.json()).then(v=>setTotalXp(v.xp)).catch(()=>{});
           setXpGained(d.totalXp); setShowXpPop(true); setTimeout(() => setShowXpPop(false), 2500);
         }
       } else {

@@ -4,10 +4,10 @@ export type PublicQuestion = Pick<Question, 'question' | 'options' | 'type'>;
 export type Summary = { id: string; title: string; subject?: string; category?: string; description?: string; mine: boolean; published: boolean; count: number; source?: 'website'; price?: number; websiteUrl?: string };
 export type Me = { user: { id: string; name: string }; dev: boolean; botUsername: string; aiAvailable: boolean; siteConnected?: boolean; siteAccount?: { linked: boolean; user: { id: number; name: string } | null }; siteError?: string };
 export type Review = Question & { answer: Answer; isCorrect: boolean };
-export type Result = { correct: number; total: number; review: Review[] };
+export type Result = { correct: number; total: number; review: Review[]; canRetry?: boolean; note?: string };
 export type Attempt = { id: string; testId: string; title: string; questions: PublicQuestion[]; answers: Answer[]; questionIndex: number; revision: number; result?: Result };
 export type LearningEntry = { id: string; testId: string; title: string; updated: number | null; total: number; correct?: number; answered?: number };
-export type Learning = { stats: { completed: number; correct: number; total: number; lessons: number; duels: number }; active: LearningEntry[]; recent: LearningEntry[] };
+export type Learning = { stats: { completed: number; correct: number; total: number; lessons: number; duels: number; xp?: number }; active: LearningEntry[]; recent: LearningEntry[]; shared?: boolean; migrationPending?: boolean; syncIssues?: number; courses?: {id:string;title:string;completed:number;total:number}[]; duels?: {id:string;title:string;opponent:string;correct:number;total:number;score:number;updated:number}[] };
 export type Course = Summary & { lessons: { id?: number; title: string; content: string; type?: string; video_url?: string; task_description?: string; task_starter_code?: string; quizCount?: number }[]; completed: number[]; locked?: boolean; linked?: boolean };
 export type Duel = {
   id: string; title: string; state: 'waiting' | 'countdown' | 'playing' | 'finished' | 'expired';
@@ -54,7 +54,7 @@ export async function telegramApi<T>(path: string, method = 'GET', body?: unknow
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'Не удалось выполнить запрос');
+  if (!response.ok) throw Object.assign(new Error(data.error || 'Не удалось выполнить запрос'),{status:response.status});
   return data as T;
 }
 

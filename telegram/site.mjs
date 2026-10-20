@@ -37,6 +37,7 @@ export function createSiteClient(env, fetcher = fetch) {
   }
   return {
     account: userId => call(userId, '/account'),
+    learning: (userId, path, method = 'GET', body) => call(userId, '/learning' + path, method, body),
     async catalog(userId, kind, mine = false) {
       const data = await call(userId, '/catalog?mine=' + mine);
       return data[kind].map(row => ({ ...row, id: 'site-' + row.id, source: 'website', mine: !!row.mine, published: row.published !== false, websiteUrl: `https://learn.aziral.com/${kind === 'courses' ? 'courses' : 'study'}/${row.id}` }));

@@ -207,3 +207,8 @@
 .tg-duel-quiz .tg-choice > span { color: inherit; background: #ffffff22; font-weight: 800; }
 .tg-duel-quiz .tg-choice[aria-pressed="true"] { outline: 3px solid var(--tg-text); outline-offset: 1px; border-color: #fff; opacity: 1; }
 .tg-duel-quiz .tg-choice:disabled:not([aria-pressed="true"]) { opacity: .65; }
+.tg-app.tg-site-learning, .tg-app.tg-site-practice { --tg-bg:#f5f3ee; --tg-surface:#fff; --tg-text:#161b27; --tg-muted:#586174; --tg-blue:#0047df; --tg-blue-soft:#e8efff; --tg-line:#d8dce5; --tg-error:#a92332; --tg-green:#176b49; --tg-input:#fafaf8; }
+.tg-site-learning { min-height:0; padding:16px; border-radius:12px; border:1px solid var(--tg-line); }
+.tg-site-practice { padding-top:88px; }
+.tg-site-practice .tg-main { padding-bottom:32px; }
+.tg-site-practice .tg-primary,.tg-site-learning .tg-primary { background:var(--tg-blue);color:#fff; }

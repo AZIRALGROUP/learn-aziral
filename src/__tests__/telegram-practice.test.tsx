@@ -59,6 +59,16 @@ describe('saved Telegram practice', () => {
     expect(screen.getByLabelText('Подтверждение завершения')).toHaveTextContent('Без ответа: 1 из 2');
     await user.click(screen.getByRole('button', { name: 'Завершить сейчас' }));
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(result));
-    expect(api).toHaveBeenCalledWith('/attempts/attempt1/submit', 'POST', { answers: [0,null] });
+    expect(api).toHaveBeenCalledWith('/attempts/attempt1/submit', 'POST', { answers: [0,null], revision: 3 });
   });
+});
+
+it('website transport preserves local answers on a cross-device conflict and reloads only on request', async()=>{
+  const user=userEvent.setup();const website=vi.fn().mockRejectedValue(Object.assign(new Error('Изменено в другом окне'),{status:409}));const reload=vi.fn().mockResolvedValue(undefined);
+  render(<PracticeSession attempt={attempt} transport={website} onReload={reload} exitRef={createRef()} onLeave={vi.fn()} onResult={vi.fn()}/>);
+  await user.click(screen.getByRole('button',{name:'Нет',exact:true}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Изменено в другом окне');
+  expect(screen.getByRole('button',{name:'Нет',exact:true})).toHaveAttribute('aria-pressed','true');
+  expect(reload).not.toHaveBeenCalled();expect(api).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button',{name:'Загрузить общую версию'}));expect(reload).toHaveBeenCalledOnce();
 });

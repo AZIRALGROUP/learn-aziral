@@ -1,11 +1,13 @@
 // Installed in the existing Aziral API. Uses its libSQL connection so writes
 // follow the same Turso primary as the website. No credentials are returned.
 const { timingSafeEqual } = require('node:crypto');
+const createLearningStore = require('./learnLearningStore.cjs');
 
 module.exports = function createLearnBridge({ db, secret = process.env.LEARN_BRIDGE_SECRET }) {
   db.exec(`CREATE TABLE IF NOT EXISTS learn_test_categories (test_id INTEGER PRIMARY KEY REFERENCES tests(id) ON DELETE CASCADE, category TEXT NOT NULL DEFAULT 'study');
     CREATE TABLE IF NOT EXISTS learn_test_imports (telegram_id TEXT NOT NULL, source_id TEXT NOT NULL, test_id INTEGER NOT NULL REFERENCES tests(id) ON DELETE CASCADE, PRIMARY KEY(telegram_id,source_id));
     CREATE TABLE IF NOT EXISTS learn_question_explanations (question_id INTEGER PRIMARY KEY REFERENCES test_questions(id) ON DELETE CASCADE, explanation TEXT NOT NULL);`);
+  const learning = createLearningStore({ db });
   function fail(status, message) { const e = new Error(message); e.status = status; throw e; }
   function userFor(id) {
     const u = db.prepare('SELECT id,name,role,banned FROM users WHERE telegram_id = ?').get(id);
@@ -42,7 +44,10 @@ module.exports = function createLearnBridge({ db, secret = process.env.LEARN_BRI
       const url = new URL(req.url, 'http://localhost');
       const path = url.pathname;
       let result;
-      if (req.method === 'GET' && path === '/account') {
+      if (path.startsWith('/learning/')) {
+        if (!user) fail(409, 'Подключите аккаунт сайта для общего прогресса');
+        result = learning.handle(user.id, req.method, path.slice('/learning'.length), req.method === 'GET' ? {} : await body(req), true);
+      } else if (req.method === 'GET' && path === '/account') {
         result = { linked: !!user, user: user ? { id: user.id, name: user.name } : null };
       } else if (req.method === 'POST' && path === '/account/link') {
         const input = await body(req);

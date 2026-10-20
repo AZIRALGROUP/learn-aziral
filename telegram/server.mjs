@@ -11,6 +11,7 @@ import { createAttempt, learningSummary, handleAttempt } from './learning.mjs';
 import { validateCategory, testCategory } from './categories.mjs';
 import { accountLink, serveAccountLink } from './account.mjs';
 import { seedCurated } from './curated.mjs';
+import { createLearningSync } from './sync-learning.mjs';
 
 export async function readJson(req) {
   let size = 0;
@@ -32,6 +33,7 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
   if (env.TELEGRAM_DEV_MODE === 'true' && env.NODE_ENV === 'production') throw new Error('Dev mode is forbidden in production');
   const generate = createGenerator(db, env, fetcher, clock);
   const site = createSiteClient(env, fetcher);
+  const learningSync = createLearningSync(db,site,clock);
   const rate = new Map();
   function upsert(user) { db.prepare('INSERT INTO users VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, username=excluded.username').run(user.id, user.name, user.username); }
   async function route(req, url) {
@@ -76,9 +78,24 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
       }
       return { synced: rows.length, more: rows.length === 10 };
     }
-    if (path === '/learning' && req.method === 'GET') return learningSummary(db, user.id, now);
-    const attemptRoute = path.match(/^\/attempts\/([a-f0-9]{32})(?:\/(save|submit|retry))?$/);
-    if (attemptRoute) return handleAttempt({ db, site, userId: user.id, id: attemptRoute[1], action: attemptRoute[2], method: req.method, body: req.method === 'GET' ? {} : await readJson(req), now });
+    if (path === '/learning' && req.method === 'GET') {
+      if (site && !dev && (await site.account(user.id)).linked) {
+        const migrated=await learningSync.syncUser(user.id,10);
+        const summary=await site.learning(user.id,'/summary');
+        return {...summary,migrationPending:summary.migrationPending||migrated.more,syncIssues:migrated.blocked||0};
+      }
+      return learningSummary(db, user.id, now);
+    }
+    const attemptRoute = path.match(/^\/attempts\/(shared-[a-z0-9-]{1,64}|[a-f0-9]{32})(?:\/(save|submit|retry))?$/);
+    if (attemptRoute) {
+      const body=req.method==='GET'?{}:await readJson(req);
+      if(site&&!dev&&(await site.account(user.id)).linked) {
+        const id=attemptRoute[1].startsWith('shared-')?attemptRoute[1]:await learningSync.ensureAttempt(user.id,attemptRoute[1]);
+        return site.learning(user.id,`/attempts/${id}${attemptRoute[2]?'/'+attemptRoute[2]:''}`,req.method,req.method==='GET'?undefined:body);
+      }
+      if(attemptRoute[1].startsWith('shared-'))throw new ApiError(409,'Подключите аккаунт сайта, чтобы открыть общую историю');
+      return handleAttempt({ db, site, userId: user.id, id: attemptRoute[1], action: attemptRoute[2], method: req.method, body, now });
+    }
 
     const collection = path.match(/^\/(tests|courses)$/);
     if (collection) {
@@ -132,16 +149,27 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
       }
       const row = external ? await site.test(user.id, id) : accessible(db, table, id, user.id);
       if (req.method === 'GET' && !action) {
+        if(table==='courses'&&site&&!dev&&(await site.account(user.id)).linked) {
+          const shared=await learningSync.ensureCourse(user.id,row);
+          return {...shared,id,mine:row.owner===user.id,published:!!row.published};
+        }
         return table === 'tests'
           ? { id, title: row.title, subject: row.subject, mine: row.owner === user.id, published: !!row.published, questions: publicQuestions(JSON.parse(row.questions)) }
           : { id, title: row.title, description: row.description, mine: row.owner === user.id, published: !!row.published, lessons: JSON.parse(row.lessons), completed: db.prepare('SELECT lesson FROM progress WHERE user_id=? AND course_id=?').all(user.id, id).map(r => r.lesson) };
       }
       if (req.method === 'POST' && action === 'attempts' && table === 'tests') {
+        if(site&&!dev&&(await site.account(user.id)).linked) {
+          return site.learning(user.id,`/tests/${external?id:'bot-'+id}/attempts`,'POST',external?{}:{title:row.title,questions:JSON.parse(row.questions)});
+        }
         return createAttempt(db, user.id, id, row.title, JSON.parse(row.questions), now);
       }
       if (req.method === 'POST' && action === 'complete' && table === 'courses') {
         const { lesson } = await readJson(req);
         if (!Number.isInteger(lesson) || lesson < 0 || lesson >= JSON.parse(row.lessons).length) throw new ApiError(400, 'Урок не найден');
+        if(site&&!dev&&(await site.account(user.id)).linked) {
+          await learningSync.ensureCourse(user.id,row);
+          await site.learning(user.id,'/courses/bot-'+id+'/complete','POST',{lesson});
+        }
         db.prepare('INSERT OR IGNORE INTO progress VALUES (?,?,?)').run(user.id, id, lesson);
         return { ok: true };
       }
@@ -216,7 +244,7 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
     }
     throw new ApiError(404, 'Маршрут не найден');
   }
-  return async (req, res) => {
+  const handler = async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     const url = new URL(req.url, 'http://localhost');
@@ -232,6 +260,8 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
       res.end(JSON.stringify({ error: e instanceof ApiError ? e.message : 'Ошибка сервера' }));
     }
   };
+  handler.syncLearning=learningSync.background;
+  return handler;
 }
 
 function validateLessons(value) {
@@ -265,7 +295,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   if (!dev && (!env.TELEGRAM_BOT_TOKEN || !env.MINI_APP_URL)) throw new Error('Configure TELEGRAM_BOT_TOKEN and MINI_APP_URL');
   const db = openStore(env.TELEGRAM_DATABASE || undefined);
   seedCurated(db);
-  const server = createServer(createApp({ db }));
+  const app=createApp({ db });
+  const server = createServer(app);
+  setTimeout(()=>void app.syncLearning(),10000).unref();
+  setInterval(()=>void app.syncLearning(),60000).unref();
   server.requestTimeout = 60000;
   server.headersTimeout = 10000;
   server.listen(Number(env.TELEGRAM_PORT || 3002), dev ? '127.0.0.1' : '0.0.0.0', () => console.log('Aziral Learn Telegram server started on port ' + (env.TELEGRAM_PORT || 3002)));

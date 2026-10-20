@@ -1,3 +1,4 @@
+import { SharedLearningPanel } from '../../learning/SharedLearning';
 import { useState, useEffect, useRef } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useNavigate } from "react-router-dom";
@@ -36,7 +37,7 @@ export function ProfilePage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"notifications" | "settings" | "courses" | "tests">("tests");
+  const [tab, setTab] = useState<"notifications" | "settings" | "courses" | "tests" | "progress">(new URLSearchParams(window.location.search).get("tab")==="progress"?"progress":"tests");
 
   const [myCourses, setMyCourses] = useState<any[]>([]);
   const [userXp, setUserXp] = useState(0);
@@ -296,6 +297,7 @@ export function ProfilePage() {
             <ClipboardList className="w-4 h-4" /> Мои тесты
             {myTests.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${tab === "tests" ? "bg-white/25 text-white" : "bg-[#E8E5DF] text-[#3A3A3A]"}`}>{myTests.length}</span>}
           </button>
+          <button onClick={() => setTab("progress")} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${tab === "progress" ? "bg-[#0047FF] text-white" : "bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B]"}`}><Clock className="w-4 h-4" />Прогресс</button>
           <button
             onClick={() => setTab("courses")}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${tab === "courses" ? "bg-[#0047FF] text-white" : "bg-[#F5F3EE] border border-[#E8E5DF] text-[#6B6B6B] hover:text-[#0A0A0A]"}`}
@@ -323,6 +325,7 @@ export function ProfilePage() {
           </button>
         </div>
 
+        {tab === "progress" && <SharedLearningPanel onXp={setUserXp} />}
         {/* Tests tab */}
         {tab === "tests" && (
           <div className="space-y-3">

@@ -6,13 +6,14 @@ import type { Answer, Attempt, Result } from './api';
 import { QuestionChoices } from './QuestionChoices';
 
 type Draft = { answers: Answer[]; questionIndex: number };
-type Props = { attempt: Attempt; onLeave: () => void; onResult: (result: Result) => void; exitRef: MutableRefObject<(() => void) | null> };
+type Props = { attempt: Attempt; onLeave: () => void; onResult: (result: Result) => void; exitRef: MutableRefObject<(() => void) | null>; transport?: typeof api; onReload?: () => Promise<void> };
 
-export function PracticeSession({ attempt, onLeave, onResult, exitRef }: Props) {
+export function PracticeSession({ attempt, onLeave, onResult, exitRef, transport = api, onReload }: Props) {
   const [draft, setDraft] = useState<Draft>({ answers: attempt.answers, questionIndex: attempt.questionIndex });
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [conflict,setConflict] = useState(false);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const revision = useRef(attempt.revision);
   const lastSaved = useRef(JSON.stringify(draft));
@@ -27,17 +28,18 @@ export function PracticeSession({ attempt, onLeave, onResult, exitRef }: Props) 
       if (lastSaved.current === serialized) return;
       if (mounted.current) setSaving(true);
       try {
-        const saved = await api<{ revision: number }>(`/attempts/${attempt.id}/save`, 'PUT', { ...value, revision: revision.current });
+        const saved = await transport<{ revision: number }>(`/attempts/${attempt.id}/save`, 'PUT', { ...value, revision: revision.current });
         revision.current = saved.revision; lastSaved.current = serialized;
         if (mounted.current) setError('');
       } catch (e) {
         if (mounted.current) setError(e instanceof Error ? e.message : 'Ответы пока не сохранены. Проверь соединение и повтори.');
+        if (mounted.current) setConflict((e as {status?:number}).status===409);
         throw e;
       } finally { if (mounted.current) setSaving(false); }
     });
     queue.current = job;
     return job;
-  }, [attempt.id]);
+  }, [attempt.id,transport]);
   const leave = useCallback(async () => {
     if (busy) return;
     setBusy(true);
@@ -52,8 +54,8 @@ export function PracticeSession({ attempt, onLeave, onResult, exitRef }: Props) 
   async function finish() {
     if (busy) return;
     setBusy(true); setError('');
-    try { await save(latest.current); onResult(await api<Result>(`/attempts/${attempt.id}/submit`, 'POST', { answers: latest.current.answers })); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Не удалось проверить тест. Попробуй снова.'); }
+    try { await save(latest.current); onResult(await transport<Result>(`/attempts/${attempt.id}/submit`, 'POST', { answers: latest.current.answers, revision: revision.current })); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Не удалось проверить тест. Попробуй снова.');setConflict((e as {status?:number}).status===409); }
     finally { if (mounted.current) setBusy(false); }
   }
   const { answers, questionIndex } = draft;
@@ -64,7 +66,7 @@ export function PracticeSession({ attempt, onLeave, onResult, exitRef }: Props) 
     <div className="tg-eyebrow">ТРЕНИРОВКА / {questionIndex + 1} ИЗ {attempt.questions.length}</div>
     <h1 className="tg-quiz-title">{attempt.title}</h1>
     <p className="tg-save-status" role="status">{saving ? <Loader2 size={16} className="tg-spin" aria-hidden="true" /> : <Cloud size={16} aria-hidden="true" />}{error ? 'Есть несохранённые изменения' : saving ? 'Сохраняем ответы…' : 'Ответы сохранены'}</p>
-    {error && <div className="tg-error" role="alert"><span>{error}</span><button className="tg-secondary" disabled={busy || saving} onClick={() => void save(latest.current).catch(() => {})}>Повторить</button></div>}
+    {error && <div className="tg-error" role="alert"><span>{error}</span>{conflict && onReload ? <button className="tg-secondary" disabled={busy || saving} onClick={() => { setBusy(true);void onReload().catch(e=>setError(e instanceof Error?e.message:'Не удалось загрузить')).finally(()=>{if(mounted.current)setBusy(false);}); }}>Загрузить общую версию</button> : <button className="tg-secondary" disabled={busy || saving} onClick={() => void save(latest.current).catch(() => {})}>Повторить</button>}</div>}
     <progress max={attempt.questions.length} value={answered} aria-label="Количество отвеченных вопросов" />
     <nav className="tg-question-map" aria-label="Перейти к вопросу">{attempt.questions.map((_, i) => <button key={i} disabled={busy} aria-current={i === questionIndex ? 'step' : undefined} aria-label={`Вопрос ${i + 1}${answers[i] !== null && (!Array.isArray(answers[i]) || answers[i].length > 0) ? ', ответ выбран' : ', без ответа'}`} onClick={() => change({ ...draft, questionIndex: i })}>{i + 1}{answers[i] !== null && (!Array.isArray(answers[i]) || answers[i].length > 0) && <Check size={12} aria-hidden="true" />}</button>)}</nav>
     <section className="tg-quiz"><h2>{attempt.questions[questionIndex].question}</h2><QuestionChoices question={attempt.questions[questionIndex]} value={answers[questionIndex]} disabled={busy} onChange={answer => {

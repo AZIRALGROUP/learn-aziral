@@ -37,6 +37,7 @@ export async function handleAttempt({ db, site, userId, id, action, method, body
     if (!site) throw new ApiError(503, 'Сайт временно недоступен');
     await site.test(userId, a.test_id);
   } else accessible(db, 'tests', a.test_id, userId);
+  if (db.prepare('SELECT 1 FROM learning_transfers WHERE attempt_id=?').get(id)) throw new ApiError(409, 'Тренировка перенесена в общий профиль. Загрузите общую версию');
   const snapshot = JSON.parse(a.snapshot);
   if (!action && method === 'GET') return {
     id, testId: a.test_id, title: a.title || 'Тренировка', questions: publicQuestions(snapshot),

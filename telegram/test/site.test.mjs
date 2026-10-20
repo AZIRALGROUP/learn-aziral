@@ -14,6 +14,7 @@ async function fixture(t) {
     CREATE TABLE course_enrollments(id INTEGER PRIMARY KEY,course_id INTEGER,user_id INTEGER,amount_paid INTEGER,payment_status TEXT,UNIQUE(course_id,user_id));
     CREATE TABLE lesson_progress(id INTEGER PRIMARY KEY,user_id INTEGER,lesson_id INTEGER,UNIQUE(user_id,lesson_id));
     CREATE TABLE user_xp(user_id INTEGER PRIMARY KEY,total_xp INTEGER,updated_at TEXT);
+    CREATE TABLE quiz_attempts(id INTEGER PRIMARY KEY,user_id INTEGER,quiz_id INTEGER,answer_index INTEGER,correct INTEGER,xp_earned INTEGER,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE course_quizzes(id INTEGER PRIMARY KEY,lesson_id INTEGER,question TEXT,options TEXT,correct_index INTEGER,order_num INTEGER);
     CREATE TABLE tests(id INTEGER PRIMARY KEY,title TEXT,category TEXT,status TEXT,updated_at TEXT,instructor_id INTEGER DEFAULT 99);
     CREATE TABLE test_questions(id INTEGER PRIMARY KEY,test_id INTEGER,question TEXT,type TEXT,options TEXT,items TEXT,correct TEXT,order_num INTEGER);
@@ -163,4 +164,108 @@ test('overlapping connection requests cannot bind the same Telegram to two websi
   writer.enqueue(new TextEncoder().encode('10}'));writer.close();
   assert.equal((await delayed).status,409);
   assert.deepEqual(db.prepare('SELECT id FROM users WHERE telegram_id=?').all('444').map(r=>r.id),[11]);
+});
+
+test('shared history resumes between browser and Telegram, rejects stale saves and keeps immutable results',async t=>{
+  const {db,site}=await fixture(t);
+  const store=(await import('../learnLearningStore.cjs')).default({db});
+  const a=store.handle(1,'POST','/tests/site-1/attempts');
+  assert.equal(a.questions[0].correct,undefined);
+  assert.equal((await site.learning('111','/tests/site-1/attempts','POST')).id,a.id);
+  await site.learning('111','/attempts/'+a.id+'/save','PUT',{answers:[[2,0]],questionIndex:0,revision:0});
+  const resumed=store.handle(1,'GET','/attempts/'+a.id);
+  assert.deepEqual(resumed.answers,[[2,0]]);assert.equal(resumed.revision,1);
+  assert.throws(()=>store.handle(1,'PUT','/attempts/'+a.id+'/save',{answers:[[1]],questionIndex:0,revision:0}),e=>e.status===409);
+  await assert.rejects(site.learning('222','/attempts/'+a.id),e=>e.status===404);
+  const result=store.handle(1,'POST','/attempts/'+a.id+'/submit',{answers:[[0,2]],revision:1,correct:999});
+  assert.equal(result.correct,1);
+  assert.deepEqual(await site.learning('111','/attempts/'+a.id+'/submit','POST',{answers:[[1]],revision:0}),result);
+  assert.throws(()=>store.handle(1,'PUT','/attempts/'+a.id+'/save',{answers:[[1]],questionIndex:0,revision:2}),e=>e.status===409);
+  assert.deepEqual(await site.learning('111','/summary'),JSON.parse(JSON.stringify(store.handle(1,'GET','/summary'))));
+  assert.equal(store.handle(1,'GET','/summary').stats.completed,1);
+  assert.throws(()=>store.handle(1,'POST','/attempts/'+a.id+'/retry',{mode:'errors'}),e=>e.status===400);
+  assert.notEqual(store.handle(1,'POST','/attempts/'+a.id+'/retry',{mode:'all'}).id,a.id);
+});
+
+test('imports preserve history and retries cannot overwrite newer shared answers',async t=>{
+  const {db,site}=await fixture(t);
+  const store=(await import('../learnLearningStore.cjs')).default({db});
+  const payload={id:'b'.repeat(32),testId:'bot-'+'c'.repeat(32),title:'Saved test',questions:[{question:'Q',options:['A','B'],correct:1,type:'single'}],answers:[0],created:123,updated:456,revision:3,questionIndex:0};
+  assert.throws(()=>store.handle(1,'POST','/import',payload),e=>e.status===404);
+  const a=await site.learning('111','/import','POST',payload);
+  store.handle(1,'PUT','/attempts/'+a.id+'/save',{answers:[1],questionIndex:0,revision:3});
+  assert.equal((await site.learning('111','/import','POST',payload)).revision,4);
+  assert.deepEqual(store.handle(1,'GET','/attempts/'+a.id).answers,[1]);
+  const done=await site.learning('111','/import','POST',{...payload,id:'d'.repeat(32),finished:true,answers:[1],correct:999});
+  assert.equal(done.result.correct,1);
+  const summary=store.handle(1,'GET','/summary');assert.equal(summary.recent[0].updated,456);assert.equal(summary.stats.completed,1);
+});
+
+test('course XP and quiz rewards are shared and awarded once; revoked paid access blocks snapshots',async t=>{
+  const {db,site}=await fixture(t);db.exec('ALTER TABLE course_quizzes ADD COLUMN xp_reward INTEGER DEFAULT 5');
+  const store=(await import('../learnLearningStore.cjs')).default({db});
+  assert.equal(store.completeLesson(1,21).xp,15);
+  assert.equal((await site.complete('111','site-2',21)).xp,0);
+  const requestId='f'.repeat(32);
+  const first=store.legacyQuiz(1,21,{answers:{1:1},requestId});
+  const second=store.legacyQuiz(1,21,{answers:{1:0},requestId});
+  assert.equal(first.attemptId,second.attemptId);assert.equal(first.totalXp,5);assert.equal(second.totalXp,0);assert.equal(second.allCorrect,true);
+  const a=await site.learning('111','/tests/lesson-21/attempts','POST');
+  await site.learning('111','/attempts/'+a.id+'/submit','POST',{answers:[1],revision:0});
+  assert.equal(store.handle(1,'GET','/summary').stats.xp,20);
+  assert.equal(store.handle(1,'GET','/summary').stats.completed,2);
+  db.exec("UPDATE course_enrollments SET payment_status='revoked' WHERE user_id=1 AND course_id=2");
+  await assert.rejects(site.learning('111','/attempts/'+a.id),e=>e.status===403);
+  assert.throws(()=>store.handle(1,'POST','/attempts/'+a.id+'/retry',{mode:'all'}),e=>e.status===403);
+});
+
+test('legacy grades stay historical after edits and personal course progress and duels share one summary',async t=>{
+  const {db,site}=await fixture(t);
+  db.exec('INSERT INTO quiz_attempts(user_id,quiz_id,answer_index,correct,xp_earned) VALUES(1,1,1,1,5)');
+  db.exec('UPDATE course_quizzes SET correct_index=0');
+  const store=(await import('../learnLearningStore.cjs')).default({db});
+  const first=store.handle(1,'GET','/summary');assert.equal(first.stats.completed,1);assert.equal(first.stats.correct,1);
+  const old=await site.learning('111','/attempts/'+first.recent[0].id);assert.equal(old.result.canRetry,false);assert.deepEqual(old.result.review,[]);
+  assert.throws(()=>store.handle(1,'POST','/attempts/'+old.id+'/retry',{mode:'all'}),e=>e.status===400);
+  const key='bot-'+'a'.repeat(32);const course={id:key,title:'Personal',description:'',lessons:[{title:'One',content:'Read'},{title:'Two',content:'Read'}],completed:[0]};
+  await site.learning('111','/courses/import','POST',course);
+  store.handle(1,'POST','/courses/'+key+'/complete',{lesson:1});
+  await site.learning('111','/courses/import','POST',course);
+  assert.deepEqual((await site.learning('111','/courses/'+key)).completed,[0,1]);
+  assert.throws(()=>store.handle(2,'GET','/courses/'+key),e=>e.status===404);
+  const duel={id:'e'.repeat(32),title:'Duel',opponent:'Friend',score:900,correct:1,total:2,updated:123};
+  await site.learning('111','/duels/import','POST',duel);await site.learning('111','/duels/import','POST',duel);
+  const summary=store.handle(1,'GET','/summary');assert.equal(summary.stats.lessons,2);assert.equal(summary.stats.duels,1);assert.equal(summary.stats.completed,1);
+});
+
+test('browser shared API verifies account and origin and exposes the same Telegram attempt',async t=>{
+  const {db,site}=await fixture(t);
+  const routes=(await import('../learnLearning.cjs')).default({db,jwtAuth:(req,res,next)=>{if(req.headers['x-qa-user']){req.user={id:Number(req.headers['x-qa-user'])};next();}else{res.statusCode=401;res.end('{}');}}});
+  const server=createServer(async(req,res)=>{const chunks=[];for await(const c of req)chunks.push(c);req.body=chunks.length?JSON.parse(Buffer.concat(chunks)):{};routes(req,res);});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>{server.closeAllConnections();server.close();});
+  const base=`http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(base+'/summary')).status,401);
+  const options={method:'POST',headers:{'x-qa-user':'1',origin:'https://evil.example'}};
+  assert.equal((await fetch(base+'/tests/site-1/attempts',options)).status,403);
+  const response=await fetch(base+'/tests/site-1/attempts',{...options,headers:{...options.headers,origin:'https://learn.aziral.com'}});
+  assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);
+  const a=await response.json();assert.equal((await site.learning('111','/attempts/'+a.id)).id,a.id);
+  assert.equal((await fetch(base+'/attempts/'+a.id,{headers:{'x-qa-user':'2'}})).status,404);
+});
+
+test('lost migration acknowledgement retries the frozen payload without overwriting shared progress',async t=>{
+  const {site}=await fixture(t);
+  const {openStore}=await import('../store.mjs');const {createLearningSync}=await import('../sync-learning.mjs');
+  const local=openStore(':memory:');t.after(()=>local.close());
+  const id='7'.repeat(32),key='8'.repeat(32);
+  local.prepare('INSERT INTO users(id,name) VALUES (?,?)').run('111','Learner');
+  local.prepare('INSERT INTO tests(id,owner,title,subject,questions,published,created) VALUES (?,?,?,?,?,?,?)').run(key,'111','Local','','[{"question":"Q","options":["A","B"],"correct":1}]',0,1);
+  local.prepare('INSERT INTO attempts(id,user_id,test_id,snapshot) VALUES (?,?,?,?)').run(id,'111',key,'[{"question":"Q","options":["A","B"],"correct":1}]');
+  local.prepare('INSERT INTO attempt_details(attempt_id,title,created,updated,answers,question_index,revision) VALUES (?,?,?,?,?,?,?)').run(id,'Local',1,2,'[0]',0,0);
+  let lose=true;const sync=createLearningSync(local,{...site,learning:async(...args)=>{const value=await site.learning(...args);if(lose){lose=false;throw new Error('Connection lost after commit');}return value;}});
+  await assert.rejects(sync.ensureAttempt('111',id),/Connection lost/);
+  assert.ok(local.prepare('SELECT payload FROM learning_transfers WHERE attempt_id=?').get(id));
+  await site.learning('111','/attempts/shared-'+id+'/save','PUT',{answers:[1],questionIndex:0,revision:0});
+  assert.equal(await sync.ensureAttempt('111',id),'shared-'+id);
+  assert.deepEqual((await site.learning('111','/attempts/shared-'+id)).answers,[1]);
 });
