@@ -1,0 +1,6 @@
+**
+!dist/
+!dist/**
+!telegram/
+!telegram/*.mjs
+!Dockerfile.telegram.runtime

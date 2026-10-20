@@ -1,0 +1,19 @@
+services:
+  telegram-learn:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    env_file: .env.telegram.local
+    environment:
+      NODE_ENV: production
+      TELEGRAM_DEV_MODE: "false"
+      TELEGRAM_DATABASE: /data/learn.sqlite
+      TELEGRAM_PORT: "3002"
+    ports:
+      - "127.0.0.1:3002:3002"
+    volumes:
+      - telegram-learn-data:/data
+    restart: unless-stopped
+
+volumes:
+  telegram-learn-data:

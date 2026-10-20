@@ -10,7 +10,12 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "telegram:dev": "node --env-file-if-exists=.env.telegram.local telegram/server.mjs",
+    "telegram:poll": "node --env-file-if-exists=.env.telegram.local telegram/poll.mjs",
+    "telegram:setup": "node --env-file-if-exists=.env.telegram.local telegram/setup.mjs",
+    "telegram:seed": "node --env-file-if-exists=.env.telegram.local telegram/seed.mjs",
+    "telegram:test": "node --test telegram/test/*.test.mjs infrastructure/cloudflare/worker.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",

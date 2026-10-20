@@ -15,6 +15,10 @@ dist-ssr
 # Cloudflare local development state
 .wrangler/
 
+# Telegram database and local runtime state
+telegram/data/
+infrastructure/cloudflare/telegram/data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

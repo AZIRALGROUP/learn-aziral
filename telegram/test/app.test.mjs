@@ -1,0 +1,286 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { createServer } from 'node:http';
+import { openStore } from '../store.mjs';
+import { verifyInitData } from '../auth.mjs';
+import { createApp } from '../server.mjs';
+import { processUpdate } from '../bot.mjs';
+
+const token = '123456789:test-token-for-local-tests';
+function signed(id, now, extra = {}) {
+  const p = new URLSearchParams({ auth_date: String(Math.floor(now / 1000)), user: JSON.stringify({ id, first_name: `Player ${id}` }), ...extra });
+  const data = [...p].sort(([a], [b]) => a.localeCompare(b)).map(([k,v]) => `${k}=${v}`).join('\n');
+  const secret = createHmac('sha256', 'WebAppData').update(token).digest();
+  p.set('hash', createHmac('sha256', secret).update(data).digest('hex'));
+  return p.toString();
+}
+const q = { question: 'Два плюс два?', options: ['4','5','6','7'], correct: 0, explanation: '2 + 2 = 4' };
+
+test('Telegram authentication rejects tampering, stale dates, duplicate keys and future dates', () => {
+  const now = Date.now();
+  assert.equal(verifyInitData(signed(10, now), token, now).id, '10');
+  assert.throws(() => verifyInitData(signed(10, now).replace('Player', 'Hacker'), token, now), /подпись/);
+  assert.throws(() => verifyInitData(signed(10, now - 3601000), token, now), /истекла/);
+  assert.throws(() => verifyInitData(signed(10, now + 60000), token, now), /истекла/);
+  assert.throws(() => verifyInitData(signed(10, now) + '&auth_date=1', token, now), /подпись/);
+  assert.throws(() => verifyInitData('', token, now), /подпись/);
+});
+
+async function fixture(t, options = {}) {
+  let now = Date.now();
+  const db = openStore(':memory:');
+  const env = { TELEGRAM_BOT_TOKEN: token, TELEGRAM_BOT_USERNAME: 'TestLearnBot', MINI_APP_URL: 'https://example.com/telegram', TELEGRAM_WEBHOOK_SECRET: 'a'.repeat(40), ...options.env };
+  const server = createServer(createApp({ db, env, clock: () => now, fetcher: options.fetcher }));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); db.close(); });
+  async function req(id, path, method = 'GET', body, headerOverride) {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/telegram${path}`, {
+      method, headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': signed(id, now), ...headerOverride },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  return { db, req, advance: ms => { now += ms; }, env, clock: () => now };
+}
+
+test('unauthenticated requests and wrong webhook secrets are denied', async t => {
+  const { req } = await fixture(t);
+  assert.equal((await req(1, '/me', 'GET', undefined, { 'X-Telegram-Init-Data': '' })).status, 401);
+  assert.equal((await req(1, '/webhook', 'POST', { update_id: 1 })).status, 401);
+  assert.equal((await req(1, '/tests', 'POST', null)).status, 400);
+});
+
+test('drafts are private; publishing exposes questions without answer keys; only author can edit', async t => {
+  const { req } = await fixture(t);
+  const created = await req(1, '/tests', 'POST', { title: 'Арифметика', questions: [q] });
+  assert.equal(created.status, 200);
+  const id = created.body.id;
+  assert.equal((await req(2, `/tests/${id}`)).status, 404);
+  assert.deepEqual((await req(2, '/tests')).body, []);
+  assert.equal((await req(1, `/tests/${id}/publish`, 'PATCH', { published: true })).status, 200);
+  const publicTest = await req(2, `/tests/${id}`);
+  assert.equal(publicTest.status, 200);
+  assert.equal(publicTest.body.questions[0].correct, undefined);
+  assert.equal(publicTest.body.questions[0].explanation, undefined);
+  assert.equal((await req(2, `/tests/${id}/edit`)).status, 403);
+  assert.equal((await req(2, `/tests/${id}/publish`, 'PATCH', { published: false })).status, 403);
+});
+
+test('practice is graded from an immutable snapshot and submission cannot be changed', async t => {
+  const { req } = await fixture(t);
+  const { body: { id } } = await req(1, '/tests', 'POST', { title: 'Арифметика', questions: [q] });
+  const a = await req(1, `/tests/${id}/attempts`, 'POST');
+  assert.equal(a.body.questions[0].correct, undefined);
+  await req(1, `/tests/${id}`, 'PUT', { title: 'Изменённый тест', questions: [{ ...q, correct: 1 }] });
+  assert.equal((await req(2, `/attempts/${a.body.id}/submit`, 'POST', { answers: [0] })).status, 404);
+  const result = await req(1, `/attempts/${a.body.id}/submit`, 'POST', { answers: [0] });
+  assert.equal(result.body.correct, 1);
+  assert.equal(result.body.review[0].explanation, q.explanation);
+  assert.deepEqual((await req(1, `/attempts/${a.body.id}/submit`, 'POST', { answers: [1] })).body, result.body);
+});
+
+test('courses keep progress per user and reject nonexistent lessons', async t => {
+  const { req } = await fixture(t);
+  const c = await req(1, '/courses', 'POST', { title: 'Мой курс', lessons: [{ title: 'Урок один', content: 'Учебный материал' }] });
+  const id = c.body.id;
+  await req(1, `/courses/${id}/publish`, 'PATCH', { published: true });
+  assert.equal((await req(2, `/courses/${id}/complete`, 'POST', { lesson: 1 })).status, 400);
+  assert.equal((await req(2, `/courses/${id}/complete`, 'POST', { lesson: 0 })).status, 200);
+  assert.deepEqual((await req(2, `/courses/${id}`)).body.completed, [0]);
+  assert.deepEqual((await req(1, `/courses/${id}`)).body.completed, []);
+});
+
+test('duel enforces two players, server time, one answer, no answer leakage, and speed bonus', async t => {
+  const { req, advance } = await fixture(t);
+  const { body: { id } } = await req(1, '/tests', 'POST', { title: 'Дуэль знаний', questions: [q, q] });
+  const duel = await req(1, '/duels', 'POST', { testId: id });
+  const path = `/duels/${duel.body.id}`;
+  assert.match(duel.body.inviteUrl, /TestLearnBot\?start=duel_/);
+  assert.equal((await req(2, path)).body.question, undefined);
+  assert.equal((await req(2, path + '/join', 'POST')).body.state, 'countdown');
+  assert.equal((await req(3, path + '/join', 'POST')).status, 409);
+  assert.equal((await req(1, path + '/answer', 'POST', { round: 0, choice: 0 })).status, 409);
+  advance(3000);
+  const v = (await req(1, path)).body;
+  assert.equal(v.state, 'playing');
+  assert.equal(v.question.correct, undefined);
+  assert.equal(v.results, undefined);
+  assert.equal((await req(3, path)).body.question, undefined);
+  assert.equal((await req(3, path + '/answer', 'POST', { round: 0, choice: 0 })).status, 403);
+  assert.equal((await req(1, path + '/answer', 'POST', { round: 0, choice: 0 })).status, 200);
+  assert.equal((await req(1, path + '/answer', 'POST', { round: 0, choice: 1 })).status, 409);
+  advance(2000);
+  await req(2, path + '/answer', 'POST', { round: 0, choice: 0 });
+  advance(13000);
+  assert.equal((await req(1, path + '/answer', 'POST', { round: 0, choice: 0 })).status, 409);
+  await req(1, path + '/answer', 'POST', { round: 1, choice: 0 });
+  await req(2, path + '/answer', 'POST', { round: 1, choice: 0 });
+  advance(15000);
+  const finished = (await req(1, path)).body;
+  assert.equal(finished.state, 'finished');
+  assert.equal(finished.results[0].id, '1');
+  assert.equal(finished.results[0].correct, 2);
+  assert.ok(finished.results[0].score > finished.results[1].score);
+  assert.equal((await req(3, path)).body.results, undefined);
+});
+
+test('duel snapshot survives test edits and expired lobbies cannot be joined', async t => {
+  const { req, advance } = await fixture(t);
+  const { body: { id } } = await req(1, '/tests', 'POST', { title: 'Дуэль знаний', questions: [q] });
+  const { body: d } = await req(1, '/duels', 'POST', { testId: id });
+  await req(1, `/tests/${id}`, 'PUT', { title: 'Обновлённый тест', questions: [{ ...q, question: 'Новый вопрос', correct: 1 }] });
+  await req(2, `/duels/${d.id}/join`, 'POST');
+  advance(3000);
+  assert.equal((await req(1, `/duels/${d.id}`)).body.question.question, q.question);
+  await req(1, `/duels/${d.id}/answer`, 'POST', { round: 0, choice: 0 });
+  advance(15000);
+  assert.equal((await req(1, `/duels/${d.id}`)).body.results[0].correct, 1);
+  const { body: lobby } = await req(1, '/duels', 'POST', { testId: id });
+  advance(900001);
+  assert.equal((await req(2, `/duels/${lobby.id}`)).body.state, 'expired');
+  assert.equal((await req(2, `/duels/${lobby.id}/join`, 'POST')).status, 410);
+});
+
+test('question validation rejects duplicate options and invalid correct indices', async t => {
+  const { req } = await fixture(t);
+  assert.equal((await req(1, '/tests', 'POST', { title: 'Плохой тест', questions: [{ ...q, correct: 4 }] })).status, 400);
+  assert.equal((await req(1, '/tests', 'POST', { title: 'Плохой тест', questions: [{ ...q, options: ['A', 'a'] }] })).status, 400);
+});
+
+test('group commands use bot links, private commands use web_app, and updates are deduplicated', async () => {
+  const db = openStore(':memory:');
+  try {
+    const env = { TELEGRAM_BOT_USERNAME: 'TestLearnBot', MINI_APP_URL: 'https://example.com/telegram' };
+    const sent = [];
+    const call = async (e, method, payload) => sent.push(payload);
+    const update = { update_id: 1, message: { from: { id: 1, first_name: 'Test' }, chat: { id: -100, type: 'supergroup' }, text: '/learn@TestLearnBot' } };
+    await processUpdate(db, env, update, Date.now(), call);
+    await processUpdate(db, env, update, Date.now(), call);
+    assert.equal(sent.length, 1);
+    assert.match(sent[0].reply_markup.inline_keyboard[0][0].url, /^https:\/\/t.me/);
+    await processUpdate(db, env, { ...update, update_id: 2, message: { ...update.message, chat: { id: 1, type: 'private' }, text: '/start duel_abc' } }, Date.now(), call);
+    assert.equal(sent[1].reply_markup.inline_keyboard[0][0].web_app.url, 'https://example.com/telegram?start=duel_abc');
+    await processUpdate(db, env, { ...update, update_id: 3, message: { ...update.message, text: '/learn@OtherBot' } }, Date.now(), call);
+    assert.equal(sent.length, 2);
+  } finally { db.close(); }
+});
+
+test('production refuses the development auth bypass', () => {
+  const db = openStore(':memory:');
+  try { assert.throws(() => createApp({ db, env: { NODE_ENV: 'production', TELEGRAM_DEV_MODE: 'true' } }), /forbidden/); }
+  finally { db.close(); }
+});
+
+test('website lesson progress follows stable lesson IDs when the author reorders lessons', async t => {
+  let reversed = false;
+  const { req } = await fixture(t, {
+    env: { SITE_API_URL: 'http://aziral-api:3001', LEARN_BRIDGE_SECRET: 'test'.repeat(12) },
+    fetcher: async () => {
+      const lessons = [{ id: 101, title: 'Первый', content: 'А' }, { id: 202, title: 'Второй', content: 'Б' }];
+      return Response.json({ id: 1, title: 'Курс сайта', lessons: reversed ? lessons.reverse() : lessons, completed: [], linked: false, locked: false });
+    },
+  });
+  assert.equal((await req(1, '/courses/site-1/complete', 'POST', { lesson: 0 })).status, 200);
+  reversed = true;
+  assert.deepEqual((await req(1, '/courses/site-1')).body.completed, [1]);
+});
+
+test('duels preserve multiple selected answers through SQLite and grade them on the server', async t => {
+  const { req, advance } = await fixture(t, {
+    env: { SITE_API_URL: 'http://aziral-api:3001', LEARN_BRIDGE_SECRET: 'test'.repeat(12) },
+    fetcher: async () => Response.json({ title: 'Несколько ответов', questions: [{ question: 'Выберите два', type: 'multi', options: '["A","B","C"]', correct: '[0,2]' }] }),
+  });
+  const { body: d } = await req(1, '/duels', 'POST', { testId: 'site-1' });
+  await req(2, `/duels/${d.id}/join`, 'POST'); advance(3000);
+  const accepted = await req(1, `/duels/${d.id}/answer`, 'POST', { round: 0, choice: [2,0] });
+  assert.equal(accepted.status, 200);assert.deepEqual(accepted.body.answer, [2,0]);
+  assert.equal((await req(2, `/duels/${d.id}/answer`, 'POST', { round: 0, choice: [0,0] })).status, 400);
+  await req(2, `/duels/${d.id}/answer`, 'POST', { round: 0, choice: [0] });advance(15000);
+  const finished = (await req(1, `/duels/${d.id}`)).body;
+  assert.equal(finished.results[0].id, '1');assert.equal(finished.results[0].correct, 1);assert.equal(finished.results[1].correct, 0);
+});
+
+test('an invitation to a paid lesson duel cannot bypass the guest course entitlement', async t => {
+  const { req } = await fixture(t, {
+    env: { SITE_API_URL: 'http://aziral-api:3001', LEARN_BRIDGE_SECRET: 'test'.repeat(12) },
+    fetcher: async (url, options) => options.headers['x-learn-telegram-id'] === '1'
+      ? Response.json({ title: 'Платный урок', questions: [{ question: 'Проверка', options: '["A","B"]', correct_index: 0 }] })
+      : Response.json({ error: 'Доступ к платному курсу не подтверждён' }, { status: 403 }),
+  });
+  const { body: d } = await req(1, '/duels', 'POST', { testId: 'lesson-21' });
+  assert.ok(d.id);
+  assert.equal((await req(2, `/duels/${d.id}`)).status, 403);
+  assert.equal((await req(2, `/duels/${d.id}/join`, 'POST')).status, 403);
+});
+
+test('saved practice resumes across requests, rejects stale writes, isolates users and keeps history immutable', async t => {
+  const { req, advance } = await fixture(t);
+  const { body: { id } } = await req(1, '/tests', 'POST', { title: 'Сохранённый тест', questions: [q, q] });
+  const { body: a } = await req(1, `/tests/${id}/attempts`, 'POST');
+  assert.deepEqual(a.answers, [null, null]);
+  const path = `/attempts/${a.id}`;
+  assert.equal((await req(2, path)).status, 404);
+  assert.equal((await req(2, path + '/save', 'PUT', { answers: [0,1], questionIndex: 1, revision: 0 })).status, 404);
+  assert.equal((await req(1, path + '/save', 'PUT', { answers: [0,9], questionIndex: 1, revision: 0 })).status, 400);
+  advance(1000);
+  assert.deepEqual((await req(1, path + '/save', 'PUT', { answers: [0,null], questionIndex: 1, revision: 0 })).body, { revision: 1 });
+  assert.equal((await req(1, path + '/save', 'PUT', { answers: [1,null], questionIndex: 0, revision: 0 })).status, 409);
+  const resumed = (await req(1, path)).body;
+  assert.deepEqual(resumed.answers, [0,null]); assert.equal(resumed.questionIndex, 1); assert.equal(resumed.revision, 1);
+  assert.equal(resumed.questions[0].correct, undefined);
+  assert.equal((await req(1, '/learning')).body.active[0].answered, 1);
+  assert.equal((await req(2, '/learning')).body.active.length, 0);
+  const result = await req(1, path + '/submit', 'POST', { answers: [0,1] });
+  assert.equal(result.body.correct, 1);
+  assert.deepEqual((await req(1, path)).body.result, result.body);
+  assert.equal((await req(1, path + '/save', 'PUT', { answers: [0,0], questionIndex: 0, revision: 1 })).status, 409);
+  const learning = (await req(1, '/learning')).body;
+  assert.equal(learning.active.length, 0); assert.equal(learning.stats.completed, 1);
+  assert.equal(learning.stats.correct, 1); assert.equal(learning.stats.total, 2);
+  assert.equal(learning.recent[0].title, 'Сохранённый тест');
+  const retry = (await req(1, path + '/retry', 'POST', { mode: 'errors' })).body;
+  assert.equal(retry.questions.length, 1); assert.deepEqual(retry.answers, [null]);
+  assert.equal(retry.questions[0].correct, undefined);
+  assert.notEqual(retry.id, a.id);
+  assert.equal((await req(1, `/attempts/${retry.id}/submit`, 'POST', { answers: [0] })).body.correct, 1);
+  assert.deepEqual((await req(1, path + '/submit', 'POST', { answers: [0,0] })).body, result.body);
+});
+
+test('saved paid lesson snapshots and answer reviews recheck entitlement on resume and retry', async t => {
+  let allowed = true;
+  const { req } = await fixture(t, {
+    env: { SITE_API_URL: 'http://aziral-api:3001', LEARN_BRIDGE_SECRET: 'test'.repeat(12) },
+    fetcher: async () => allowed
+      ? Response.json({ title: 'Платный урок', questions: [{ question: 'Проверка', options: '["A","B"]', correct_index: 0 }] })
+      : Response.json({ error: 'Доступ к курсу закрыт' }, { status: 403 }),
+  });
+  const { body: a } = await req(1, '/tests/lesson-21/attempts', 'POST');
+  allowed = false;
+  for (const [suffix, method, body] of [['', 'GET'], ['/save','PUT',{ answers: [0], questionIndex: 0, revision: 0 }], ['/submit','POST',{ answers: [0] }]]) {
+    assert.equal((await req(1, `/attempts/${a.id}${suffix}`, method, body)).status, 403);
+  }
+  allowed = true;
+  await req(1, `/attempts/${a.id}/submit`, 'POST', { answers: [0] });
+  allowed = false;
+  assert.equal((await req(1, `/attempts/${a.id}`)).status, 403);
+  assert.equal((await req(1, `/attempts/${a.id}/retry`, 'POST', { mode: 'all' })).status, 403);
+});
+
+test('bot offers direct useful menus and private help while ignoring ordinary group conversation', async () => {
+  const db = openStore(':memory:');
+  try {
+    const env = { TELEGRAM_BOT_USERNAME: 'TestLearnBot', MINI_APP_URL: 'https://example.com/telegram' };
+    const sent = []; const call = async (e, method, payload) => sent.push(payload);
+    const message = { from: { id: 1, first_name: 'Test' }, chat: { id: 1, type: 'private' }, text: '/progress' };
+    await processUpdate(db, env, { update_id: 20, message }, Date.now(), call);
+    assert.equal(sent[0].reply_markup.inline_keyboard[0][0].web_app.url, 'https://example.com/telegram?start=profile');
+    const buttons = sent[0].reply_markup.inline_keyboard.flat();
+    assert.ok(buttons.some(b => b.web_app?.url.endsWith('start=newtest')));
+    assert.ok(buttons.some(b => b.url?.includes('startgroup=learn')));
+    await processUpdate(db, env, { update_id: 21, message: { ...message, text: 'Как учиться?' } }, Date.now(), call);
+    assert.match(sent[1].text, /Как пользоваться/);
+    await processUpdate(db, env, { update_id: 22, message: { ...message, chat: { id: -100, type: 'supergroup' }, text: 'Привет всем!' } }, Date.now(), call);
+    assert.equal(sent.length, 2);
+  } finally { db.close(); }
+});

@@ -1,0 +1,16 @@
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:24-alpine
+ENV NODE_ENV=production TELEGRAM_PORT=3002 TELEGRAM_DATABASE=/data/learn.sqlite
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY telegram/*.mjs ./telegram/
+RUN mkdir /data && chown node:node /data
+USER node
+EXPOSE 3002
+CMD ["node", "telegram/server.mjs"]
