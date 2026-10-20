@@ -33,3 +33,16 @@ test('gateway preserves Telegram credentials and bodies, strips forged internal 
     assert.match(response.headers.get('Cloudflare-CDN-Cache-Control'), /no-store/);
   } finally { globalThis.fetch = original; }
 });
+
+test('browser connection forwards only the SSO cookie and never caches the confirmation',async()=>{
+  const original=globalThis.fetch;
+  try {
+    globalThis.fetch=async req=>{
+      assert.equal(req.headers.get('cookie'),'auth_token=signed.test.token');
+      assert.equal(req.headers.get('authorization'),null);
+      return new Response('confirmation',{headers:{'Cache-Control':'public,max-age=3600'}});
+    };
+    const r=await worker.fetch(new Request('https://learn-bot.aziral.com/connect-account?code=abc',{headers:{cookie:'tracking=private; auth_token=signed.test.token; other=secret',authorization:'forged'}}),{ORIGIN_TOKEN:'test'});
+    assert.match(r.headers.get('Cache-Control'),/no-store/);
+  } finally {globalThis.fetch=original;}
+});

@@ -20,6 +20,10 @@ export function openStore(filename = 'telegram/data/learn.sqlite') {
     CREATE TABLE IF NOT EXISTS ai_usage (day TEXT, user_id TEXT, count INTEGER NOT NULL, PRIMARY KEY(day, user_id));
     CREATE TABLE IF NOT EXISTS ai_cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, created INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS bot_updates (id INTEGER PRIMARY KEY, payload TEXT NOT NULL, sent INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS test_categories (test_id TEXT PRIMARY KEY REFERENCES tests(id) ON DELETE CASCADE, category TEXT NOT NULL DEFAULT 'study');
+    CREATE TABLE IF NOT EXISTS account_links (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS site_test_links (local_id TEXT PRIMARY KEY REFERENCES tests(id), site_id TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS duel_messages (duel_id TEXT PRIMARY KEY REFERENCES duels(id), message_id TEXT NOT NULL, expires INTEGER NOT NULL);
   `);
   return db;
 }

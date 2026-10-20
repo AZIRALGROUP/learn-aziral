@@ -16,7 +16,7 @@ export function normalizeSiteQuestion(q) {
   const correct = parsed(q.correct || '[]');
   const labels = type === 'tf' && options.length < 2 ? ['Правда', 'Ложь'] : options;
   if (!['single', 'multi', 'tf'].includes(type) || !Array.isArray(correct) || !correct.length || correct.some(i => !Number.isInteger(i) || i < 0 || i >= labels.length)) throw new ApiError(422, 'В тесте сайта есть вопрос без корректного ответа. Автору нужно исправить его на сайте');
-  return { question: q.question, options: labels, correct: type === 'multi' ? correct : correct[0], type: type === 'multi' ? type : 'single', explanation: '' };
+  return { question: q.question, options: labels, correct: type === 'multi' ? correct : correct[0], type: type === 'multi' ? type : 'single', explanation: q.explanation || '' };
 }
 
 export function createSiteClient(env, fetcher = fetch) {
@@ -37,9 +37,9 @@ export function createSiteClient(env, fetcher = fetch) {
   }
   return {
     account: userId => call(userId, '/account'),
-    async catalog(userId, kind) {
-      const data = await call(userId, '/catalog');
-      return data[kind].map(row => ({ ...row, id: 'site-' + row.id, source: 'website', mine: false, published: true, websiteUrl: `https://learn.aziral.com/${kind === 'courses' ? 'courses' : 'study'}/${row.id}` }));
+    async catalog(userId, kind, mine = false) {
+      const data = await call(userId, '/catalog?mine=' + mine);
+      return data[kind].map(row => ({ ...row, id: 'site-' + row.id, source: 'website', mine: !!row.mine, published: row.published !== false, websiteUrl: `https://learn.aziral.com/${kind === 'courses' ? 'courses' : 'study'}/${row.id}` }));
     },
     async test(userId, id) {
       const lesson = isLessonId(id);
@@ -47,7 +47,25 @@ export function createSiteClient(env, fetcher = fetch) {
       const data = await call(userId, lesson ? `/lessons/${id.slice(7)}/quiz` : `/tests/${id.slice(5)}`);
       const questions = data.questions.map(normalizeSiteQuestion);
       if (!questions.length) throw new ApiError(422, 'В тесте пока нет вопросов');
-      return { id, title: data.title, subject: data.subject || '', owner: 'website', source: 'website', published: 1, questions: JSON.stringify(questions) };
+      return { id, title: data.title, subject: data.subject || '', category: data.category || 'study', owner: data.mine ? userId : 'website', source: 'website', published: data.published !== false ? 1 : 0, questions: JSON.stringify(questions) };
+    },
+    async saveTest(userId, body, id) {
+      const result = await call(userId, id ? '/tests/' + id.slice(5) : '/tests', id ? 'PUT' : 'POST', body);
+      return { id: 'site-' + result.id };
+    },
+    publishTest: (userId, id, published) => call(userId, '/tests/' + id.slice(5) + '/publish', 'PATCH', { published }),
+    linkAccount: (userId, siteUserId) => call(userId, '/account/link', 'POST', { siteUserId }),
+    async browserAccount(cookie) {
+      const token = String(cookie || '').split(';').map(s => s.trim()).find(s => /^auth_token=[A-Za-z0-9_.-]{1,4096}$/.test(s));
+      if (!token) return null;
+      try {
+        const r = await fetcher(new URL('/api/auth/me', base), { headers: { cookie: token }, signal: AbortSignal.timeout(10000), redirect: 'error' });
+        if (r.status === 401 || r.status === 403) return null;
+        if (!r.ok) throw new Error('Site unavailable');
+        const data = await r.json();
+        if (!Number.isSafeInteger(data.id) || data.id < 1 || typeof data.name !== 'string') throw new Error('Invalid account');
+        return { id: data.id, name: data.name };
+      } catch { throw new ApiError(503, 'Сайт временно недоступен. Попробуйте позже'); }
     },
     async course(userId, id) {
       const data = await call(userId, `/courses/${id.slice(5)}`);

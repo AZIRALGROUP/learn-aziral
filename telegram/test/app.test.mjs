@@ -41,7 +41,7 @@ async function fixture(t, options = {}) {
     });
     return { status: response.status, body: await response.json() };
   }
-  return { db, req, advance: ms => { now += ms; }, env, clock: () => now };
+  return { db, req, base: `http://127.0.0.1:${server.address().port}`, advance: ms => { now += ms; }, env, clock: () => now };
 }
 
 test('unauthenticated requests and wrong webhook secrets are denied', async t => {
@@ -314,4 +314,60 @@ test('profile photo upload preserves multipart attachment and automatic boundary
     return Response.json({ ok: true, result: true });
   });
   assert.equal(result, true);
+});
+
+test('browser account connection requires an expiring one-time link, verified website cookie and same-origin confirmation',async t=>{
+  let linked=0;
+  const {req,base,db,advance}=await fixture(t,{env:{SITE_API_URL:'http://aziral-api:3001',LEARN_BRIDGE_SECRET:'test'.repeat(12)},fetcher:async(url,options)=>{
+    const path=new URL(url).pathname;
+    if(path==='/api/auth/me') {
+      assert.equal(options.headers.cookie,'auth_token=valid.token');
+      return Response.json({id:7,name:'Account <A>'});
+    }
+    if(path==='/api/learn-bridge/account/link') {
+      assert.equal(JSON.parse(options.body).siteUserId,7);
+      assert.equal(options.headers['x-learn-telegram-id'],'1');linked++;
+      return Response.json({linked:true,user:{id:7,name:'Account <A>'}});
+    }
+    throw new Error('Unexpected request');
+  }});
+  const link=(await req(1,'/account/link','POST',{siteUserId:999})).body.url;
+  const path=new URL(link).pathname+new URL(link).search;
+  assert.equal(db.prepare('SELECT hash FROM account_links').get().hash.includes(new URL(link).searchParams.get('code')),false);
+  const login=await fetch(base+path); assert.match(await login.text(),/Войти на сайте/);assert.equal(linked,0);
+  const confirm=await fetch(base+path,{headers:{cookie:'tracking=no; auth_token=valid.token'}});
+  assert.match(await confirm.text(),/Account &lt;A&gt;/);assert.equal(linked,0);
+  assert.equal((await fetch(base+path,{method:'POST',headers:{cookie:'auth_token=valid.token',origin:'https://evil.example'}})).status,403);
+  const success=await fetch(base+path,{method:'POST',headers:{cookie:'auth_token=valid.token',origin:'https://example.com'}});
+  assert.equal(success.status,200);assert.equal(linked,1);
+  assert.equal((await fetch(base+path)).status,410);
+  const another=(await req(2,'/account/link','POST')).body.url;advance(600001);
+  assert.equal((await fetch(base+new URL(another).pathname+new URL(another).search)).status,410);
+});
+
+test('duel chat cards are bound to the host, contain a join button and are cached until expiry',async t=>{
+  let calls=0;
+  const {req,advance,clock}=await fixture(t,{fetcher:async(url,options)=>{
+    assert.ok(url.endsWith('/savePreparedInlineMessage'));calls++;
+    const payload=JSON.parse(options.body);
+    assert.equal(payload.user_id,1);assert.equal(payload.allow_group_chats,true);
+    assert.match(payload.result.reply_markup.inline_keyboard[0][0].url,/start=duel_/);
+    assert.ok(!JSON.stringify(payload).includes('correct'));
+    return Response.json({ok:true,result:{id:'prepared-card',expiration_date:Math.floor(clock()/1000)+600}});
+  }});
+  const test=(await req(1,'/tests','POST',{title:'Карточка дуэли',questions:[q]})).body.id;
+  const duel=(await req(1,'/duels','POST',{testId:test})).body.id;
+  assert.equal((await req(2,`/duels/${duel}/share`,'POST')).status,403);
+  assert.equal((await req(1,`/duels/${duel}/share`,'POST')).body.id,'prepared-card');
+  assert.equal((await req(1,`/duels/${duel}/share`,'POST')).body.id,'prepared-card');assert.equal(calls,1);
+  advance(900001);assert.equal((await req(1,`/duels/${duel}/share`,'POST')).status,410);
+});
+
+test('test category persists across edits and invalid categories cannot create a test',async t=>{
+  const {req}=await fixture(t);
+  assert.equal((await req(1,'/tests','POST',{title:'Категория',category:'unknown',questions:[q]})).status,400);
+  const id=(await req(1,'/tests','POST',{title:'Игровой тест',category:'games',questions:[q]})).body.id;
+  assert.equal((await req(1,'/tests?mine=true')).body[0].category,'games');
+  await req(1,`/tests/${id}`,'PUT',{title:'Научный тест',category:'science',questions:[q]});
+  assert.equal((await req(1,`/tests/${id}/edit`)).body.category,'science');
 });

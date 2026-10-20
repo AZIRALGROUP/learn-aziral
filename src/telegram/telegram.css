@@ -177,3 +177,33 @@
   .tg-ai-toggle, .tg-ai-panel { border-color: #536d9a; }
 }
 @media (prefers-reduced-motion: reduce) { .tg-app button { transition: none; } .tg-spin { animation: none; } }
+
+.tg-category-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 12px 0; }
+.tg-category { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 14px 10px; border: 1px solid var(--tg-line); border-radius: 12px; text-align: left; background: var(--tg-surface); color: var(--tg-text); }
+.tg-category:hover { border-color: var(--tg-blue); background: var(--tg-blue-soft); }
+.tg-category > svg { flex-shrink: 0; color: var(--tg-blue); }
+.tg-category span { min-width: 0; }
+.tg-category strong, .tg-category small, .tg-random-duel strong, .tg-random-duel small { display: block; }
+.tg-category strong { font-size: 14px; }
+.tg-category small { font-size: 11px; line-height: 1.35; color: var(--tg-muted); margin-top: 3px; }
+.tg-category-path { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+.tg-category-path strong { font-size: 13px; }
+.tg-random-duel { display: flex; width: 100%; align-items: center; gap: 12px; text-align: left; padding: 12px; margin: 10px 0; border: 1px solid var(--tg-line); border-radius: 12px; background: var(--tg-blue-soft); color: var(--tg-text); }
+.tg-random-duel span { flex: 1; }
+.tg-random-duel small { color: var(--tg-muted); font-size: 12px; margin-top: 3px; }
+.tg-create-modes { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; padding: 4px; border-radius: 11px; background: var(--tg-blue-soft); margin: 12px 0; }
+.tg-create-modes button { display: flex; justify-content: center; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: transparent; color: var(--tg-text); font-weight: 600; }
+.tg-create-modes button[aria-pressed="true"] { background: var(--tg-surface); box-shadow: 0 1px 3px #0002; }
+.tg-file-input { position: relative; overflow: hidden; }
+.tg-file-input input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.tg-file-input:focus-within { outline: 3px solid var(--tg-blue); outline-offset: 2px; }
+.tg-ai-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.tg-duel-quiz .tg-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.tg-duel-quiz .tg-choices > p { grid-column: 1 / -1; }
+.tg-duel-quiz .tg-choice { flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; min-width: 0; min-height: 96px; padding: 12px; border: 2px solid transparent; color: #fff; background: #b12c53; overflow-wrap: anywhere; text-align: left; }
+.tg-duel-quiz .tg-choice:nth-of-type(4n+2) { background: #2454ad; }
+.tg-duel-quiz .tg-choice:nth-of-type(4n+3) { background: #f4c45c; color: #30240a; }
+.tg-duel-quiz .tg-choice:nth-of-type(4n+4) { background: #176747; }
+.tg-duel-quiz .tg-choice > span { color: inherit; background: #ffffff22; font-weight: 800; }
+.tg-duel-quiz .tg-choice[aria-pressed="true"] { outline: 3px solid var(--tg-text); outline-offset: 1px; border-color: #fff; opacity: 1; }
+.tg-duel-quiz .tg-choice:disabled:not([aria-pressed="true"]) { opacity: .65; }

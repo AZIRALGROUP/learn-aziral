@@ -1,7 +1,7 @@
 export type Answer = number | number[] | null;
 export type Question = { question: string; options: string[]; correct: number | number[]; explanation: string; type?: 'single' | 'multi' | 'order' };
 export type PublicQuestion = Pick<Question, 'question' | 'options' | 'type'>;
-export type Summary = { id: string; title: string; subject?: string; description?: string; mine: boolean; published: boolean; count: number; source?: 'website'; price?: number; websiteUrl?: string };
+export type Summary = { id: string; title: string; subject?: string; category?: string; description?: string; mine: boolean; published: boolean; count: number; source?: 'website'; price?: number; websiteUrl?: string };
 export type Me = { user: { id: string; name: string }; dev: boolean; botUsername: string; aiAvailable: boolean; siteConnected?: boolean; siteAccount?: { linked: boolean; user: { id: number; name: string } | null }; siteError?: string };
 export type Review = Question & { answer: Answer; isCorrect: boolean };
 export type Result = { correct: number; total: number; review: Review[] };
@@ -21,6 +21,9 @@ export interface TelegramWebApp {
   initData: string;
   ready: () => void; expand: () => void;
   openTelegramLink: (url: string) => void;
+  openLink?: (url: string) => void;
+  shareMessage?: (id: string, callback?: (sent: boolean) => void) => void;
+  isVersionAtLeast?: (version: string) => boolean;
   BackButton: { show: () => void; hide: () => void; onClick: (fn: () => void) => void; offClick: (fn: () => void) => void };
   HapticFeedback?: { selectionChanged: () => void };
   enableClosingConfirmation?: () => void; disableClosingConfirmation?: () => void;
@@ -59,6 +62,19 @@ export function shareDuel(url: string) {
   const link = 'https://t.me/share/url?' + new URLSearchParams({ url, text: 'Проверим знания? Присоединяйся к моей дуэли в Learn × Aziral!' });
   if (window.Telegram?.WebApp.initData) window.Telegram.WebApp.openTelegramLink(link);
   else window.open(link, '_blank', 'noopener,noreferrer');
+}
+
+export async function inviteToDuel(duel: Pick<Duel, 'id' | 'inviteUrl'>, onSent: () => void) {
+  const tg = window.Telegram?.WebApp;
+  if (tg?.initData && tg.shareMessage && tg.isVersionAtLeast?.('8.0')) {
+    const prepared = await telegramApi<{ id: string }>(`/duels/${duel.id}/share`, 'POST');
+    tg.shareMessage(prepared.id, sent => { if (sent) onSent(); });
+  } else shareDuel(duel.inviteUrl);
+}
+
+export function openAccountLink(url: string) {
+  if (window.Telegram?.WebApp.openLink) window.Telegram.WebApp.openLink(url);
+  else window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export function choiceText(question: PublicQuestion, value: Answer) {

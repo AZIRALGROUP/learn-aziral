@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, Clock3, Copy, GraduationCap, Loader2, Plus, Search, Send, Sparkles, Swords, Trophy, UserRound, X } from 'lucide-react';
-import { choiceText, loadTelegram, shareDuel, telegramApi as api } from './api';
+import { ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, Clock3, Copy, GraduationCap, Loader2, Plus, Search, Send, Shuffle, Sparkles, Swords, Trophy, UserRound, X } from 'lucide-react';
+import { choiceText, inviteToDuel, loadTelegram, openAccountLink, telegramApi as api } from './api';
 import type { Attempt, Answer, Course, Duel, Learning, Me, Question, Result, Summary } from './api';
 import { QuestionChoices } from './QuestionChoices';
 import { PracticeSession } from './PracticeSession';
 import { LearningHome } from './LearningHome';
 import { EditorSection } from './EditorSection';
 import { clearEditorErrors, focusNewEditorSection, revealInvalidEditorField } from './editor-validation';
+import { CategoryBrowser } from './CategoryBrowser';
+import { categories, categoryOf, categoryLabel } from './categories';
+import { TestImport } from './TestImport';
 import './telegram.css';
 
 const blankQuestion = (): Question => ({ question: '', options: ['', '', '', ''], correct: 0, explanation: '' });
@@ -25,9 +28,12 @@ export default function TelegramApp() {
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
+  const [category, setCategory] = useState('study');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [importing, setImporting] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([blankQuestion()]);
   const [source, setSource] = useState('');
-  const [aiCount, setAiCount] = useState(5);
+  const [aiCount, setAiCount] = useState(10);
   const [showAi, setShowAi] = useState(false);
   const [aiConsent, setAiConsent] = useState(false);
   const [openQuestion, setOpenQuestion] = useState<number | null>(0);
@@ -48,6 +54,7 @@ export default function TelegramApp() {
   const [tick, setTick] = useState(Date.now());
   const [clockOffset, setClockOffset] = useState(0);
   const [copyNotice, setCopyNotice] = useState(false);
+  const [shareNotice, setShareNotice] = useState(false);
   const [duelDraft, setDuelDraft] = useState<{ key: string; value: Answer }>({ key: '', value: null });
 
   const go = useCallback((next: Screen) => {
@@ -134,7 +141,7 @@ export default function TelegramApp() {
     try { await fn(); } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   function newTest() {
-    setEditing(null); setTitle(''); setSubject(''); setQuestions([blankQuestion()]); setSource(''); setShowAi(false); setAiConsent(false); setOpenQuestion(0); go('create-test');
+    setEditing(null); setTitle(''); setSubject(''); setCategory(categoryFilter || 'study'); setQuestions([blankQuestion()]); setSource(''); setShowAi(!!me?.aiAvailable); setImporting(false); setAiConsent(false); setOpenQuestion(0); go('create-test');
   }
   async function startPractice(id: string) {
     const active = learning?.active.find(a => a.testId === id);
@@ -144,15 +151,16 @@ export default function TelegramApp() {
   }
   async function startDuel(id: string) {
     const d = await api<{ id: string }>('/duels', 'POST', { testId: id });
-    setDuel(null); setDuelId(d.id); setCopyNotice(false); go('duel');
+    setDuel(null); setDuelId(d.id); setCopyNotice(false); setShareNotice(false); go('duel');
   }
   async function publish(item: Summary, table: string) {
     await api(`/${table}/${item.id}/publish`, 'PATCH', { published: !item.published });
     await refresh();
   }
   async function editTest(id: string) {
-    const t = await api<{ title: string; subject: string; questions: Question[] }>(`/tests/${id}/edit`);
-    setEditing(id); setTitle(t.title); setSubject(t.subject); setQuestions(t.questions); setSource(''); setAiConsent(false); setShowAi(false); setOpenQuestion(0); go('create-test');
+    const t = await api<{ title: string; subject: string; category?: string; questions: Question[] }>(`/tests/${id}/edit`);
+    if (t.questions.some(q => Array.isArray(q.correct))) throw new Error('Этот тест содержит несколько ответов или порядок. Отредактируй его на сайте, чтобы сохранить формат.');
+    setEditing(id); setTitle(t.title); setSubject(t.subject); setCategory(t.category || 'study'); setQuestions(t.questions); setSource(''); setAiConsent(false); setShowAi(false); setImporting(false); setOpenQuestion(0); go('create-test');
   }
   async function openAttempt(id: string) {
     const a = await api<Attempt>(`/attempts/${id}`); setAttempt(a);
@@ -164,8 +172,10 @@ export default function TelegramApp() {
   }
   const library = ['tests', 'courses', 'duels'].includes(screen);
   const home = library || screen === 'profile';
-  const subjects = [...new Set(items.map(i => i.subject).filter((s): s is string => !!s))].sort();
-  const filtered = items.filter(i => (i.title + ' ' + (i.subject || '')).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (!subjectFilter || i.subject === subjectFilter));
+  const categoryItems = items.filter(i => !categoryFilter || categoryOf(i) === categoryFilter);
+  const subjects = [...new Set(categoryItems.map(i => i.subject).filter((s): s is string => !!s))].sort();
+  const filtered = categoryItems.filter(i => (i.title + ' ' + (i.subject || '')).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (!subjectFilter || i.subject === subjectFilter));
+  const showCategories = screen !== 'courses' && !mine && !categoryFilter && !query.trim();
   const seconds = duel ? Math.max(0, Math.ceil(((duel.state === 'countdown' ? duel.startAt : duel.endsAt) || 0) - (tick + clockOffset)) / 1000) : 0;
 
   if (!me) return <main className="tg-app tg-boot"><GraduationCap size={40} aria-hidden="true" /><h1>Learn × Aziral</h1>{bootError ? <><p role="alert">{bootError}</p><button onClick={() => void boot()}>Попробовать снова</button><a href="https://t.me/Learn_Aziral_bot">Открыть бота в Telegram</a></> : <p role="status">Подключаем приложение…</p>}</main>;
@@ -177,19 +187,21 @@ export default function TelegramApp() {
       {!home && screen !== 'practice' && <button className="tg-back" onClick={back}><ArrowLeft size={18} aria-hidden="true" />Назад</button>}
       {error && <div className="tg-error" role="alert"><span>{error}</span><button className="tg-icon-button" aria-label="Закрыть сообщение" onClick={() => setError('')}><X size={18} aria-hidden="true" /></button></div>}
 
-      {screen === 'profile' && <LearningHome me={me} learning={learning} error={learningError} busy={busy} onRetry={() => void refreshLearning()} onOpen={id => void action(() => openAttempt(id))} onBrowse={() => go('tests')} onRefreshAccount={() => void action(async () => { setMe(await api<Me>('/me')); })} />}
+      {screen === 'profile' && <LearningHome me={me} learning={learning} error={learningError} busy={busy} onRetry={() => void refreshLearning()} onOpen={id => void action(() => openAttempt(id))} onBrowse={() => go('tests')} onConnectAccount={() => void action(async () => { const link = await api<{ url: string }>('/account/link', 'POST'); openAccountLink(link.url); })} onRefreshAccount={() => void action(async () => { const session = await api<Me>('/me'); setMe(session); if (session.siteAccount?.linked) { for (let i=0;i<21;i++) { const result = await api<{ more: boolean }>('/account/sync', 'POST'); if (!result.more) break; } } })} />}
       {library && <>
         <div className="tg-page-heading"><div><h1>{screen === 'courses' ? 'Курсы' : screen === 'duels' ? 'Дуэли' : 'Тесты'}</h1><p className="tg-intro">{screen === 'courses' ? 'Уроки и твой прогресс' : screen === 'duels' ? 'Выбери тест и пригласи друга' : 'Практикуйся или создай свой тест'}</p></div><button className="tg-primary" aria-label={screen === 'courses' ? 'Создать курс' : 'Создать тест'} onClick={screen === 'courses' ? () => { setTitle(''); setSubject(''); setLessons([{ title: '', content: '' }]); setOpenLesson(0); go('create-course'); } : newTest}><Plus size={16} aria-hidden="true" />{screen === 'courses' ? 'Курс' : 'Тест'}</button></div>
         {screen === 'tests' && learning?.active[0] && <section className="tg-resume"><div><span className="tg-eyebrow">ПРОДОЛЖИТЬ</span><h2>{learning.active[0].title}</h2><p className="tg-muted">Ответов: {learning.active[0].answered} из {learning.active[0].total}</p></div><button className="tg-primary" disabled={busy} onClick={() => void action(() => openAttempt(learning.active[0].id))}>Продолжить<ArrowRight size={18} aria-hidden="true" /></button></section>}
-        <section aria-label="Библиотека"><div className="tg-section-title"><h2>{screen === 'duels' ? 'Тесты для дуэли' : 'Библиотека'}</h2><span>{items.length}</span></div>
-          <div className="tg-filter"><label className="tg-search"><Search size={18} aria-hidden="true" /><input aria-label="Поиск по названию или предмету" placeholder="Найти свою тему" value={query} onChange={e => { setQuery(e.target.value); setVisibleCount(12); }} /></label>{query && <button className="tg-icon-button" aria-label="Очистить поиск" onClick={() => { setQuery(''); setVisibleCount(12); }}><X size={18} aria-hidden="true" /></button>}<button className={mine ? 'tg-filter-active' : 'tg-secondary'} aria-pressed={mine} onClick={() => { setMine(!mine); setVisibleCount(12); setSubjectFilter(''); }}>Мои</button></div>
-          {subjects.length > 1 && <label className="tg-subject-filter">Предмет<select value={subjectFilter} onChange={e => { setSubjectFilter(e.target.value); setVisibleCount(12); }}><option value="">Все предметы</option>{subjects.map(s => <option key={s} value={s}>{s}</option>)}</select></label>}
-          {!loading && <p className="tg-small" role="status">Найдено: {filtered.length}{mine ? ' · твои материалы' : ''}</p>}
-          {loading ? <p className="tg-muted" role="status">Загружаем материалы…</p> : filtered.length ? <div className="tg-list">{filtered.slice(0, visibleCount).map(item => <article className="tg-card" key={item.id}><div className="tg-card-top"><span className="tg-tag">{screen === 'courses' ? 'КУРС' : item.subject || 'ПРАКТИКА'}</span>{item.mine && <span className="tg-muted">{item.published ? 'Опубликован' : 'Черновик'}</span>}</div><h3>{item.title}</h3><p className="tg-muted">{item.source && <span className="tg-tag">С сайта{item.price ? ` · ${item.price} ₸` : ''}</span>} {item.count} {countNoun(item.count, screen === 'courses' ? ['урок', 'урока', 'уроков'] : ['вопрос', 'вопроса', 'вопросов'])}{item.mine ? ' · твой материал' : ''}</p><div className="tg-card-actions"><button className="tg-primary" disabled={busy} onClick={() => void action(async () => {
+        <section aria-label="Библиотека"><div className="tg-section-title"><h2>{screen === 'duels' ? 'Тесты для дуэли' : 'Библиотека'}</h2></div>
+          <div className="tg-filter"><label className="tg-search"><Search size={18} aria-hidden="true" /><input aria-label="Поиск по названию или предмету" placeholder="Найти свою тему" value={query} onChange={e => { setQuery(e.target.value); setVisibleCount(12); }} /></label>{query && <button className="tg-icon-button" aria-label="Очистить поиск" onClick={() => { setQuery(''); setVisibleCount(12); }}><X size={18} aria-hidden="true" /></button>}<button className={mine ? 'tg-filter-active' : 'tg-secondary'} aria-pressed={mine} onClick={() => { setMine(!mine); setVisibleCount(12); setSubjectFilter(''); setCategoryFilter(''); }}>Мои</button></div>
+          {screen !== 'courses' && !mine && <CategoryBrowser value={categoryFilter} onChange={id => { setCategoryFilter(id); setSubjectFilter(''); setVisibleCount(12); }} />}
+          {screen === 'duels' && !loading && !!filtered.length && <button className="tg-random-duel" disabled={busy} onClick={() => void action(() => startDuel(filtered[Math.floor(Math.random()*filtered.length)].id))}><Shuffle size={20} aria-hidden="true" /><span><strong>Случайная тема</strong><small>{categoryFilter ? categoryLabel(categoryFilter) : 'Из всей библиотеки'} · до 10 вопросов</small></span><ArrowRight size={18} aria-hidden="true" /></button>}
+          {!showCategories && (screen === 'courses' || categoryFilter === 'study') && subjects.length > 1 && <label className="tg-subject-filter">Предмет<select value={subjectFilter} onChange={e => { setSubjectFilter(e.target.value); setVisibleCount(12); }}><option value="">Все предметы</option>{subjects.map(s => <option key={s} value={s}>{s}</option>)}</select></label>}
+          {!loading && !showCategories && <p className="tg-small" role="status">{filtered.length} {countNoun(filtered.length, screen === 'courses' ? ['курс', 'курса', 'курсов'] : ['тест', 'теста', 'тестов'])}{mine ? ' · твои материалы' : ''}</p>}
+          {showCategories ? <p className="tg-small">Выбери категорию или найди тест по названию.</p> : loading ? <p className="tg-muted" role="status">Загружаем материалы…</p> : filtered.length ? <div className="tg-list">{filtered.slice(0, visibleCount).map(item => <article className="tg-card" key={item.id}><div className="tg-card-top"><span className="tg-tag">{screen === 'courses' ? 'КУРС' : item.subject || categoryLabel(categoryOf(item))}</span>{item.mine && <span className="tg-muted">{item.published ? 'Опубликован' : 'Черновик'}</span>}</div><h3>{item.title}</h3><p className="tg-muted">{item.source && <span className="tg-tag">С сайта{item.price ? ` · ${item.price} ₸` : ''}</span>} {item.count} {countNoun(item.count, screen === 'courses' ? ['урок', 'урока', 'уроков'] : ['вопрос', 'вопроса', 'вопросов'])}{item.mine ? ' · твой материал' : ''}</p><div className="tg-card-actions"><button className="tg-primary" disabled={busy} onClick={() => void action(async () => {
             if (screen === 'courses') { const c = await api<Course>(`/courses/${item.id}`); setCourse(c); setLesson(Math.max(0, c.lessons.findIndex((_, i) => !c.completed.includes(i)))); go('course'); }
             else if (screen === 'duels') await startDuel(item.id); else await startPractice(item.id);
-          })}>{screen === 'courses' ? 'Учиться' : screen === 'duels' ? 'Создать дуэль' : learning?.active.some(a => a.testId === item.id) ? 'Продолжить' : 'Тренироваться'}<ArrowRight size={17} aria-hidden="true" /></button>{screen === 'tests' && <button className="tg-icon-button" disabled={busy} aria-label={`Дуэль по тесту ${item.title}`} onClick={() => void action(() => startDuel(item.id))}><Swords size={20} aria-hidden="true" /></button>}</div>{item.websiteUrl && <a className="tg-source-link" href={item.websiteUrl} target="_blank" rel="noopener noreferrer">На сайте</a>}{item.mine && <div className="tg-owner-actions">{screen !== 'courses' && <button disabled={busy} onClick={() => void action(() => editTest(item.id))}>Редактировать</button>}<button disabled={busy} onClick={() => void action(() => publish(item, screen === 'courses' ? 'courses' : 'tests'))}>{item.published ? 'Снять с публикации' : 'Опубликовать для всех'}</button></div>}</article>)}</div> : <div className="tg-empty"><BookOpen size={32} aria-hidden="true" /><h3>{query ? 'Пока ничего не нашлось' : 'Здесь начинается твоя коллекция'}</h3><p>{query ? 'Попробуй другое название или предмет.' : 'Создай первый материал вручную или начни с темы для ИИ.'}</p></div>}
-          {!loading && filtered.length > visibleCount && <button className="tg-secondary tg-wide" onClick={() => setVisibleCount(visibleCount + 12)}>Показать ещё · осталось {filtered.length - visibleCount}</button>}
+          })}>{screen === 'courses' ? 'Учиться' : screen === 'duels' ? 'Создать дуэль' : learning?.active.some(a => a.testId === item.id) ? 'Продолжить' : 'Тренироваться'}<ArrowRight size={17} aria-hidden="true" /></button>{screen === 'tests' && <button className="tg-icon-button" disabled={busy} aria-label={`Дуэль по тесту ${item.title}`} onClick={() => void action(() => startDuel(item.id))}><Swords size={20} aria-hidden="true" /></button>}</div>{item.websiteUrl && <a className="tg-source-link" href={item.websiteUrl} target="_blank" rel="noopener noreferrer">На сайте</a>}{item.mine && !(screen === 'courses' && item.source) && <div className="tg-owner-actions">{screen !== 'courses' && <button disabled={busy} onClick={() => void action(() => editTest(item.id))}>Редактировать</button>}<button disabled={busy} onClick={() => void action(() => publish(item, screen === 'courses' ? 'courses' : 'tests'))}>{item.published ? 'Снять с публикации' : 'Опубликовать для всех'}</button></div>}</article>)}</div> : <div className="tg-empty"><BookOpen size={32} aria-hidden="true" /><h3>{query ? 'Пока ничего не нашлось' : 'Здесь начинается твоя коллекция'}</h3><p>{query ? 'Попробуй другое название или предмет.' : 'Создай первый материал вручную или начни с темы для ИИ.'}</p></div>}
+          {!loading && !showCategories && filtered.length > visibleCount && <button className="tg-secondary tg-wide" onClick={() => setVisibleCount(visibleCount + 12)}>Показать ещё · осталось {filtered.length - visibleCount}</button>}
         </section>
       </>}
 
@@ -200,24 +212,26 @@ export default function TelegramApp() {
           if (q.options.findIndex(o => o.trim().toLocaleLowerCase() === option.trim().toLocaleLowerCase()) !== n) form.querySelector<HTMLInputElement>(`[name="option-${i}-${n}"]`)?.setCustomValidity('Варианты ответа должны различаться');
         }));
         if (!revealInvalidEditorField(form, setOpenQuestion)) return;
-        void action(async () => { await api(editing ? `/tests/${editing}` : '/tests', editing ? 'PUT' : 'POST', { title, subject, questions }); setMine(true); go('tests'); });
+        void action(async () => { await api(editing ? `/tests/${editing}` : '/tests', editing ? 'PUT' : 'POST', { title, subject, category, questions }); setCategoryFilter(''); setMine(true); go('tests'); });
       }}>
         <h1>{editing ? 'Редактор теста' : 'Новый тест'}</h1>
         <div className="tg-form-grid"><label className="tg-field">Название<input name="title" required minLength={3} maxLength={160} value={title} onChange={e => { e.currentTarget.setCustomValidity(''); setTitle(e.target.value); }} placeholder="Тема теста" /></label>
-        <label className="tg-field">Предмет<input maxLength={80} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Необязательно" /></label></div>
-        <button type="button" className="tg-ai-toggle" aria-expanded={showAi} onClick={() => setShowAi(!showAi)}><Sparkles size={16} aria-hidden="true" />{showAi ? 'Скрыть ИИ' : 'Создать вопросы с ИИ'}</button>
-        {showAi && <section className="tg-ai-panel" aria-label="Помощник ИИ"><p className="tg-small">Тема — название теста.</p><details className="tg-fold"><summary>Добавить конспект</summary><label className="tg-field">Учебный текст<textarea rows={3} maxLength={12000} value={source} onChange={e => setSource(e.target.value)} placeholder="Без личных данных" /></label></details><label className="tg-field tg-inline-field">Вопросов<select value={aiCount} onChange={e => setAiCount(Number(e.target.value))}>{[3, 5, 10].map(n => <option key={n} value={n}>{n}</option>)}</select></label><p className="tg-small">Gemini получит тему и конспект. На бесплатном тарифе Google может использовать их для улучшения сервисов.</p><label className="tg-check"><input type="checkbox" checked={aiConsent} onChange={e => setAiConsent(e.target.checked)} />Разрешаю отправить материал в Gemini</label><button className="tg-primary" type="button" disabled={busy || !me.aiAvailable || !aiConsent || title.trim().length < 3} onClick={() => void action(async () => {
-          const generated = await api<{ questions: Question[] }>('/ai/generate', 'POST', { topic: title, source, count: aiCount });
+        <label className="tg-field">Категория<select value={category} onChange={e => setCategory(e.target.value)}>{categories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label></div>
+        {category === 'study' && <label className="tg-field">Предмет<input maxLength={80} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Например, биология" /></label>}
+        <div className="tg-create-modes" aria-label="Способ создания"><button type="button" aria-pressed={showAi} onClick={() => { setShowAi(true); setImporting(false); }}><Sparkles size={15} aria-hidden="true" />С ИИ</button><button type="button" aria-pressed={!showAi && !importing} onClick={() => { setShowAi(false); setImporting(false); }}>Вручную</button><button type="button" aria-pressed={importing} onClick={() => { setImporting(true); setShowAi(false); }}>Импорт</button></div>
+        {importing && <TestImport onImport={(name, rows) => { setTitle(name); setQuestions(rows); setOpenQuestion(0); setImporting(false); }} onSource={text => { setSource(text); setShowAi(true); setImporting(false); }} />}
+        {showAi && <section className="tg-ai-panel" aria-label="Помощник ИИ"><p className="tg-small">Напиши тему в названии — ИИ соберёт весь тест. Проверь вопросы перед сохранением.</p><details className="tg-fold"><summary>Добавить конспект</summary><label className="tg-field">Учебный текст<textarea rows={3} maxLength={12000} value={source} onChange={e => setSource(e.target.value)} placeholder="Без личных данных" /></label></details><label className="tg-field tg-inline-field">Вопросов<select value={aiCount} onChange={e => setAiCount(Number(e.target.value))}>{[5, 10].map(n => <option key={n} value={n}>{n}</option>)}</select></label><p className="tg-small">Gemini получит тему и конспект. На бесплатном тарифе Google может использовать их для улучшения сервисов.</p><label className="tg-check"><input type="checkbox" checked={aiConsent} onChange={e => setAiConsent(e.target.checked)} />Разрешаю отправить материал в Gemini</label><button className="tg-primary" type="button" disabled={busy || !me.aiAvailable || !aiConsent || title.trim().length < 3} onClick={() => void action(async () => {
+          const generated = await api<{ questions: Question[] }>('/ai/generate', 'POST', { topic: title, source, count: aiCount, category });
           setQuestions(prev => [...prev.filter(q => q.question.trim()), ...generated.questions].slice(0, 30)); setShowAi(false); setOpenQuestion(0);
-        })}>{busy ? <Loader2 className="tg-spin" size={16} aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}Сгенерировать</button>{!me.aiAvailable && <p className="tg-small">ИИ пока недоступен. Вопросы можно добавить вручную.</p>}</section>}
-        <div className="tg-section-title"><h2>Вопросы</h2><span>{questions.length}/30</span></div>
+        })}>{busy ? <Loader2 className="tg-spin" size={16} aria-hidden="true" /> : <Sparkles size={16} aria-hidden="true" />}Создать тест</button>{!me.aiAvailable && <p className="tg-small">ИИ пока недоступен. Вопросы можно добавить вручную.</p>}</section>}
+        {(!showAi || questions.some(q => q.question.trim())) && <><div className="tg-section-title"><h2>Вопросы</h2><span>{questions.length}/30</span></div>
         {questions.map((q, i) => <EditorSection key={i} id={`tg-question-${i}`} index={i} label={`Вопрос ${i + 1}`} preview={q.question} open={openQuestion === i} busy={busy} canRemove={questions.length > 1} onToggle={() => setOpenQuestion(openQuestion === i ? null : i)} onRemove={() => { setQuestions(questions.filter((_, j) => i !== j)); setOpenQuestion(openQuestion === null ? null : openQuestion > i ? openQuestion - 1 : Math.min(openQuestion, questions.length - 2)); }}>
           <label className="tg-field">Вопрос<textarea required rows={2} maxLength={1500} value={q.question} onChange={e => { e.currentTarget.setCustomValidity(''); setQuestions(questions.map((v, j) => j === i ? { ...v, question: e.target.value } : v)); }} /></label>
           <p className="tg-small">Отметь правильный ответ слева.</p>{q.options.map((option, n) => <div className="tg-option-editor" key={n}><label className="tg-radio"><input type="radio" name={`correct-${i}`} aria-label={`Вариант ${n + 1} — правильный для вопроса ${i + 1}`} checked={q.correct === n} onChange={() => setQuestions(questions.map((v, j) => j === i ? { ...v, correct: n } : v))} /></label><input name={`option-${i}-${n}`} required aria-label={`Вариант ${n + 1} вопроса ${i + 1}`} maxLength={500} placeholder={`Ответ ${n + 1}`} value={option} onChange={e => { e.currentTarget.setCustomValidity(''); setQuestions(questions.map((v, j) => j === i ? { ...v, options: v.options.map((o, k) => k === n ? e.target.value : o) } : v)); }} /></div>)}
           <details className="tg-fold"><summary>Объяснение ответа{q.explanation ? ' · добавлено' : ''}</summary><label className="tg-field">Объяснение<textarea rows={2} maxLength={2000} value={q.explanation} onChange={e => setQuestions(questions.map((v, j) => j === i ? { ...v, explanation: e.target.value } : v))} /></label></details>
         </EditorSection>)}
-        <button type="button" className="tg-secondary tg-wide" disabled={questions.length >= 30 || busy} onClick={() => { setOpenQuestion(questions.length); setQuestions([...questions, blankQuestion()]); focusNewEditorSection(`tg-question-${questions.length}`); }}><Plus size={16} aria-hidden="true" />Добавить вопрос</button>
-        <div className="tg-editor-footer"><span>Черновик · {questions.length} {countNoun(questions.length, ['вопрос', 'вопроса', 'вопросов'])}</span><button className="tg-primary" type="submit" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить'}<Check size={16} aria-hidden="true" /></button></div>
+        <button type="button" className="tg-secondary tg-wide" disabled={questions.length >= 30 || busy} onClick={() => { setOpenQuestion(questions.length); setQuestions([...questions, blankQuestion()]); focusNewEditorSection(`tg-question-${questions.length}`); }}><Plus size={16} aria-hidden="true" />Добавить вопрос</button></>}
+        <div className="tg-editor-footer"><span>Черновик · {questions.length} {countNoun(questions.length, ['вопрос', 'вопроса', 'вопросов'])}</span><button className="tg-primary" type="submit" disabled={busy || (showAi && !questions.some(q => q.question.trim()))}>{busy ? 'Сохраняем…' : 'Сохранить'}<Check size={16} aria-hidden="true" /></button></div>
       </form>}
 
       {screen === 'create-course' && <form className="tg-compact-editor" noValidate onSubmit={e => {
@@ -238,9 +252,9 @@ export default function TelegramApp() {
 
       {screen === 'duel' && <>{!duel ? <p role="status">Загружаем дуэль…</p> : <>
         <div className="tg-eyebrow">ДУЭЛЬ / {duel.total} ВОПРОСОВ</div><h1 className="tg-quiz-title">{duel.title}</h1><div className="tg-players">{duel.players.map(p => <span key={p.id}><span className="tg-avatar">{p.name.slice(0, 1)}</span>{p.name}{p.id === me.user.id ? ' (ты)' : ''}</span>)}{duel.players.length === 1 && <span className="tg-muted">Друг ещё не вошёл</span>}</div>
-        {duel.state === 'waiting' && <section className="tg-duel-lobby"><Swords size={32} aria-hidden="true" /><h2>{duel.member ? 'Осталось позвать друга' : 'Тебя вызывают на дуэль'}</h2><p>Старт через 3 секунды после входа друга. Вопрос — 15 секунд. Ссылка действует 15 минут.</p>{!duel.member ? <button className="tg-primary" disabled={busy} onClick={() => void action(async () => { setDuel(await api<Duel>(`/duels/${duel.id}/join`, 'POST')); })}>Принять вызов<ArrowRight size={18} aria-hidden="true" /></button> : <><button className="tg-primary" onClick={() => shareDuel(duel.inviteUrl)}><Send size={16} aria-hidden="true" />Пригласить друга</button><button className="tg-secondary" onClick={() => void action(async () => { await navigator.clipboard.writeText(duel.inviteUrl); setCopyNotice(true); })}><Copy size={16} aria-hidden="true" />{copyNotice ? 'Ссылка скопирована' : 'Копировать ссылку'}</button><label className="tg-field">Ссылка приглашения<input readOnly aria-label="Ссылка приглашения" value={duel.inviteUrl} onFocus={e => e.currentTarget.select()} /></label></>}</section>}
+        {duel.state === 'waiting' && <section className="tg-duel-lobby"><Swords size={32} aria-hidden="true" /><h2>{duel.member ? 'Осталось позвать друга' : 'Тебя вызывают на дуэль'}</h2><p>Старт через 3 секунды после входа друга. Вопрос — 15 секунд. Ссылка действует 15 минут.</p>{!duel.member ? <button className="tg-primary" disabled={busy} onClick={() => void action(async () => { setDuel(await api<Duel>(`/duels/${duel.id}/join`, 'POST')); })}>Принять вызов<ArrowRight size={18} aria-hidden="true" /></button> : <><button className="tg-primary" disabled={busy} onClick={() => void action(async () => { await inviteToDuel(duel, () => setShareNotice(true)); })}><Send size={16} aria-hidden="true" />{shareNotice ? 'Отправить ещё раз' : 'Пригласить в чат'}</button>{shareNotice && <p className="tg-small" role="status">Приглашение отправлено</p>}<details className="tg-fold"><summary>Ссылка приглашения</summary><button className="tg-secondary" onClick={() => void action(async () => { await navigator.clipboard.writeText(duel.inviteUrl); setCopyNotice(true); })}><Copy size={16} aria-hidden="true" />{copyNotice ? 'Ссылка скопирована' : 'Копировать ссылку'}</button><label className="tg-field">Ссылка приглашения<input readOnly aria-label="Ссылка приглашения" value={duel.inviteUrl} onFocus={e => e.currentTarget.select()} /></label></details></>}</section>}
         {duel.state === 'countdown' && <div className="tg-countdown" role="status"><p>Приготовься!</p><strong>{Math.ceil(seconds)}</strong></div>}
-        {duel.state === 'playing' && duel.question && <><div className="tg-section-title"><span>Вопрос {duel.round + 1}/{duel.total}</span><span className="tg-timer"><Clock3 size={18} aria-hidden="true" />{Math.ceil(seconds)} с</span></div><section className="tg-quiz"><h2>{duel.question.question}</h2><QuestionChoices question={duel.question} value={duel.answer ?? (duelDraft.key === `${duel.id}:${duel.round}` ? duelDraft.value : null)} disabled={busy || duel.answer != null || seconds <= 0} onChange={answer => {
+        {duel.state === 'playing' && duel.question && <><div className="tg-section-title"><span>Вопрос {duel.round + 1}/{duel.total}</span><span className="tg-timer"><Clock3 size={18} aria-hidden="true" />{Math.ceil(seconds)} с</span></div><section className="tg-quiz tg-duel-quiz"><h2>{duel.question.question}</h2><QuestionChoices question={duel.question} value={duel.answer ?? (duelDraft.key === `${duel.id}:${duel.round}` ? duelDraft.value : null)} disabled={busy || duel.answer != null || seconds <= 0} onChange={answer => {
           if (duel.question?.type === 'multi' || duel.question?.type === 'order') setDuelDraft({ key: `${duel.id}:${duel.round}`, value: answer });
           else void action(async () => { const updated = await api<Duel>(`/duels/${duel.id}/answer`, 'POST', { round: duel.round, choice: answer }); setDuel({ ...updated, inviteUrl: duel.inviteUrl }); });
         }} />{(duel.question.type === 'multi' || duel.question.type === 'order') && duel.answer == null && <button className="tg-primary tg-wide" disabled={busy || seconds <= 0 || (duel.question.type === 'multi' && !(duelDraft.key === `${duel.id}:${duel.round}` && Array.isArray(duelDraft.value) && duelDraft.value.length))} onClick={() => void action(async () => {
@@ -252,7 +266,7 @@ export default function TelegramApp() {
         {duel.state === 'finished' && duel.results && <section className="tg-result-hero"><Trophy size={32} aria-hidden="true" /><h2>{duel.results[0].score === duel.results[1].score ? 'Ничья!' : duel.results[0].id === me.user.id ? 'Твоя победа!' : `Победил ${duel.results[0].name}`}</h2>{duel.results.map((p, i) => <div key={p.id} className="tg-score"><strong>{i + 1}. {p.name}</strong><span>{p.correct}/{duel.total} верно · {p.score} очков</span></div>)}<p>За верный ответ — 1000 очков, за скорость — до 150 дополнительных.</p><button className="tg-primary" onClick={() => go('duels')}>Ещё одну дуэль<Swords size={18} aria-hidden="true" /></button></section>}
       </>}</>}
     </main>
-    {home && <nav className="tg-bottom-nav" aria-label="Разделы приложения">{([{ id: 'tests', label: 'Тесты', icon: GraduationCap }, { id: 'courses', label: 'Курсы', icon: BookOpen }, { id: 'duels', label: 'Дуэли', icon: Swords }, { id: 'profile', label: 'Прогресс', icon: UserRound }] as const).map(tab => <button key={tab.id} aria-current={screen === tab.id ? 'page' : undefined} onClick={() => { setQuery(''); setSubjectFilter(''); setVisibleCount(12); go(tab.id); }}><tab.icon size={20} aria-hidden="true" /><span>{tab.label}</span></button>)}</nav>}
+    {home && <nav className="tg-bottom-nav" aria-label="Разделы приложения">{([{ id: 'tests', label: 'Тесты', icon: GraduationCap }, { id: 'courses', label: 'Курсы', icon: BookOpen }, { id: 'duels', label: 'Дуэли', icon: Swords }, { id: 'profile', label: 'Профиль', icon: UserRound }] as const).map(tab => <button key={tab.id} aria-current={screen === tab.id ? 'page' : undefined} onClick={() => { setQuery(''); setSubjectFilter(''); setCategoryFilter(''); setVisibleCount(12); go(tab.id); }}><tab.icon size={20} aria-hidden="true" /><span>{tab.label}</span></button>)}</nav>}
   </div>;
 }
 

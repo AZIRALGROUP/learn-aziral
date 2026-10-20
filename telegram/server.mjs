@@ -8,6 +8,9 @@ import { createGenerator } from './gemini.mjs';
 import { miniLink, processUpdate, telegramCall } from './bot.mjs';
 import { createSiteClient, isSiteId, isLessonId } from './site.mjs';
 import { createAttempt, learningSummary, handleAttempt } from './learning.mjs';
+import { validateCategory, testCategory } from './categories.mjs';
+import { accountLink, serveAccountLink } from './account.mjs';
+import { seedCurated } from './curated.mjs';
 
 export async function readJson(req) {
   let size = 0;
@@ -59,6 +62,20 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
       return { user, dev, botUsername: env.TELEGRAM_BOT_USERNAME || '', aiAvailable: !!env.GEMINI_API_KEY && env.GEMINI_FREE_TIER_CONFIRMED === 'true', siteConnected: !!site, siteAccount: account, siteError };
     }
     if (path === '/ai/generate' && req.method === 'POST') return generate(user.id, await readJson(req));
+    if (path === '/account/link' && req.method === 'POST') {
+      if (!site || dev) throw new ApiError(503, 'Подключение доступно в Telegram');
+      return accountLink(db,env,user.id,now);
+    }
+    if (path === '/account/sync' && req.method === 'POST') {
+      if (!site || dev || !(await site.account(user.id)).linked) throw new ApiError(409, 'Сначала подключите аккаунт сайта');
+      const rows = db.prepare('SELECT t.* FROM tests t LEFT JOIN site_test_links l ON l.local_id=t.id WHERE t.owner=? AND l.local_id IS NULL ORDER BY t.created LIMIT 10').all(user.id);
+      for (const row of rows) {
+        const result = await site.saveTest(user.id,{ title: row.title, subject: row.subject, category: testCategory(db,row.id), questions: validateQuestions(JSON.parse(row.questions)), sourceId: row.id });
+        if (row.published) await site.publishTest(user.id,result.id,true);
+        db.prepare('INSERT OR IGNORE INTO site_test_links VALUES (?,?)').run(row.id,result.id);
+      }
+      return { synced: rows.length, more: rows.length === 10 };
+    }
     if (path === '/learning' && req.method === 'GET') return learningSummary(db, user.id, now);
     const attemptRoute = path.match(/^\/attempts\/([a-f0-9]{32})(?:\/(save|submit|retry))?$/);
     if (attemptRoute) return handleAttempt({ db, site, userId: user.id, id: attemptRoute[1], action: attemptRoute[2], method: req.method, body: req.method === 'GET' ? {} : await readJson(req), now });
@@ -68,18 +85,21 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
       const table = collection[1];
       if (req.method === 'GET') {
         const mine = url.searchParams.get('mine') === 'true';
-        const local = db.prepare(`SELECT * FROM ${table} WHERE ${mine ? 'owner = ?' : '(published = 1 OR owner = ?)'} ORDER BY created DESC LIMIT 200`).all(user.id).map(row => ({ id: row.id, title: row.title, subject: row.subject, description: row.description, mine: row.owner === user.id, published: !!row.published, count: JSON.parse(row.questions || row.lessons).length }));
-        return site && !mine && !dev ? [...await site.catalog(user.id, table), ...local] : local;
+        const local = db.prepare(`SELECT * FROM ${table} WHERE ${mine ? 'owner = ?' : '(published = 1 OR owner = ?)'} ${table === 'tests' ? 'AND id NOT IN (SELECT local_id FROM site_test_links)' : ''} ORDER BY created DESC LIMIT 200`).all(user.id).map(row => ({ id: row.id, title: row.title, subject: row.subject, category: table === 'tests' ? testCategory(db,row.id) : 'study', description: row.description, mine: row.owner === user.id, published: !!row.published, count: JSON.parse(row.questions || row.lessons).length }));
+        return site && !dev ? [...await site.catalog(user.id, table, mine), ...local] : local;
       }
       if (req.method === 'POST') {
         const body = await readJson(req);
         const id = newId();
         const title = text(body.title, 'Название', 160, 3);
         const count = db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE owner=?`).get(user.id).n;
-        if (count >= 200) throw new ApiError(400, 'Достигнут лимит: 200 материалов');
+        if (count >= 200 && (table !== 'tests' || !site || dev || !(await site.account(user.id)).linked)) throw new ApiError(400, 'Достигнут лимит: 200 материалов');
         if (table === 'tests') {
           const questions = validateQuestions(body.questions);
+          const category = validateCategory(body.category);
+          if (site && !dev && (await site.account(user.id)).linked) return site.saveTest(user.id,{ title, subject: text(body.subject || '', 'Предмет',80,0), category, questions });
           db.prepare('INSERT INTO tests VALUES (?,?,?,?,?,?,?)').run(id, user.id, title, text(body.subject || '', 'Предмет', 80, 0), JSON.stringify(questions), 0, now);
+          db.prepare('INSERT INTO test_categories VALUES (?,?)').run(id,category);
         } else {
           const lessons = validateLessons(body.lessons);
           db.prepare('INSERT INTO courses VALUES (?,?,?,?,?,?,?)').run(id, user.id, title, text(body.description || '', 'Описание', 1000, 0), JSON.stringify(lessons), 0, now);
@@ -126,16 +146,20 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
         return { ok: true };
       }
       if (row.owner !== user.id) throw new ApiError(403, 'Редактировать может только автор');
-      if (req.method === 'GET' && action === 'edit') return { ...row, questions: row.questions ? JSON.parse(row.questions) : undefined, lessons: row.lessons ? JSON.parse(row.lessons) : undefined };
+      if (req.method === 'GET' && action === 'edit') return { ...row, category: external ? row.category : testCategory(db,id), questions: row.questions ? JSON.parse(row.questions) : undefined, lessons: row.lessons ? JSON.parse(row.lessons) : undefined };
       if (req.method === 'PATCH' && action === 'publish') {
         const { published } = await readJson(req);
         if (typeof published !== 'boolean') throw new ApiError(400, 'Укажите статус публикации');
+        if (external) return site.publishTest(user.id,id,published);
         db.prepare(`UPDATE ${table} SET published=? WHERE id=?`).run(Number(published), id);
         return { ok: true, published };
       }
       if (req.method === 'PUT' && !action && table === 'tests') {
         const b = await readJson(req);
+        const category = validateCategory(b.category);
+        if (external) return site.saveTest(user.id,{ title: text(b.title,'Название',160,3), subject: text(b.subject || '', 'Предмет',80,0), category, questions: validateQuestions(b.questions) },id);
         db.prepare('UPDATE tests SET title=?,subject=?,questions=? WHERE id=?').run(text(b.title, 'Название', 160, 3), text(b.subject || '', 'Предмет', 80, 0), JSON.stringify(validateQuestions(b.questions)), id);
+        db.prepare('INSERT INTO test_categories VALUES (?,?) ON CONFLICT(test_id) DO UPDATE SET category=excluded.category').run(id,category);
         return { id };
       }
     }
@@ -145,11 +169,27 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
       const id = createDuel(db, testId, user.id, now, sourceTest);
       return { id, inviteUrl: miniLink(env, 'duel_' + id) };
     }
-    const duel = path.match(/^\/duels\/([a-f0-9]{32})(?:\/(join|answer))?$/);
+    const duel = path.match(/^\/duels\/([a-f0-9]{32})(?:\/(join|answer|share))?$/);
     if (duel) {
       const [, id, action] = duel;
       const d = db.prepare('SELECT * FROM duels WHERE id=?').get(id);
       if (!d) throw new ApiError(404, 'Дуэль не найдена');
+      if (req.method === 'POST' && action === 'share') {
+        if (d.host !== user.id) throw new ApiError(403, 'Пригласить может создатель дуэли');
+        if (d.start_at || now - d.created >= 900000) throw new ApiError(410,'Приглашение уже не действует');
+        const cached = db.prepare('SELECT * FROM duel_messages WHERE duel_id=? AND expires>?').get(id,now+30000);
+        if (cached) return { id: cached.message_id };
+        if (dev) throw new ApiError(503,'Поделиться карточкой можно в Telegram');
+        const inviteUrl = miniLink(env,'duel_'+id);
+        const prepared = await telegramCall(env,'savePreparedInlineMessage',{
+          user_id: Number(user.id), allow_user_chats: true, allow_group_chats: true,
+          result: { type: 'article', id, title: 'Дуэль: '+d.title,
+            input_message_content: { message_text: `Вызов на дуэль · Learn × Aziral\n\n${d.title}\n${JSON.parse(d.snapshot).length} вопросов · 15 секунд на ответ\n\nКто быстрее? Прими вызов!`, link_preview_options: { is_disabled: true } },
+            reply_markup: { inline_keyboard: [[{ text: 'Принять вызов',url: inviteUrl }]] } },
+        },fetcher);
+        db.prepare('INSERT INTO duel_messages VALUES (?,?,?) ON CONFLICT(duel_id) DO UPDATE SET message_id=excluded.message_id,expires=excluded.expires').run(id,prepared.id,prepared.expiration_date*1000);
+        return { id: prepared.id };
+      }
       if (isLessonId(d.test_id)) {
         if (!site) throw new ApiError(503, 'Сайт временно недоступен');
         await site.test(user.id, d.test_id);
@@ -180,6 +220,7 @@ export function createApp({ env = process.env, db = openStore(env.TELEGRAM_DATAB
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname === '/connect-account') return serveAccountLink(req,res,{ db,site,env,now: clock() });
     if (!url.pathname.startsWith('/api/telegram/')) return serveStatic(req, res, url, env);
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -222,7 +263,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const env = process.env;
   const dev = env.TELEGRAM_DEV_MODE === 'true';
   if (!dev && (!env.TELEGRAM_BOT_TOKEN || !env.MINI_APP_URL)) throw new Error('Configure TELEGRAM_BOT_TOKEN and MINI_APP_URL');
-  const server = createServer(createApp());
+  const db = openStore(env.TELEGRAM_DATABASE || undefined);
+  seedCurated(db);
+  const server = createServer(createApp({ db }));
   server.requestTimeout = 60000;
   server.headersTimeout = 10000;
   server.listen(Number(env.TELEGRAM_PORT || 3002), dev ? '127.0.0.1' : '0.0.0.0', () => console.log('Aziral Learn Telegram server started on port ' + (env.TELEGRAM_PORT || 3002)));
