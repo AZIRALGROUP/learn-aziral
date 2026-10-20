@@ -56,7 +56,7 @@ export async function telegramApi<T>(path: string, method = 'GET', body?: unknow
 }
 
 export function shareDuel(url: string) {
-  const link = 'https://t.me/share/url?' + new URLSearchParams({ url, text: 'Проверим знания? Присоединяйся к моей дуэли в Aziral Learn!' });
+  const link = 'https://t.me/share/url?' + new URLSearchParams({ url, text: 'Проверим знания? Присоединяйся к моей дуэли в Learn × Aziral!' });
   if (window.Telegram?.WebApp.initData) window.Telegram.WebApp.openTelegramLink(link);
   else window.open(link, '_blank', 'noopener,noreferrer');
 }
