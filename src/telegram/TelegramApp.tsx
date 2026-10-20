@@ -167,7 +167,7 @@ export default function TelegramApp() {
   if (!me) return <main className="tg-app tg-boot"><GraduationCap size={40} aria-hidden="true" /><h1>Aziral Learn</h1>{bootError ? <><p role="alert">{bootError}</p><button onClick={() => void boot()}>Попробовать снова</button><a href="https://t.me/Learn_Aziral_bot">Открыть бота в Telegram</a></> : <p role="status">Подключаем приложение…</p>}</main>;
 
   return <div className="tg-app">
-    <header className="tg-header"><button onClick={home ? () => go('tests') : back} className="tg-brand" aria-label="Aziral Learn — главная"><span className="tg-brand-icon"><GraduationCap aria-hidden="true" size={24} /></span><span>AZIRAL<span className="tg-brand-sub">LEARN / TELEGRAM</span></span></button><button className="tg-avatar tg-profile-button" disabled={!home} aria-label="Мой прогресс" onClick={() => go('profile')}>{me.user.name.slice(0, 1)}</button></header>
+    <header className="tg-header"><button onClick={home ? () => go('tests') : back} className="tg-brand" aria-label="Aziral Learn — главная"><span className="tg-brand-icon"><img src="/telegram/avatar.svg" alt="" width={44} height={44} /></span><span>AZIRAL<span className="tg-brand-sub">LEARN / TELEGRAM</span></span></button><button className="tg-avatar tg-profile-button" disabled={!home} aria-label="Мой прогресс" onClick={() => go('profile')}>{me.user.name.slice(0, 1)}</button></header>
     <main className="tg-main">
       {me.dev && <p className="tg-notice">Локальный просмотр · вход через Telegram на рабочем сервере</p>}
       {!home && screen !== 'practice' && <button className="tg-back" onClick={back}><ArrowLeft size={18} aria-hidden="true" />Назад</button>}

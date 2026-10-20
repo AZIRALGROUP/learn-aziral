@@ -1,12 +1,14 @@
 import { ApiError } from './auth.mjs';
 import { createDuel } from './store.mjs';
 import { createSiteClient, isSiteId, isLessonId } from './site.mjs';
+import { botMessages } from './branding.mjs';
 
 export async function telegramCall(env, method, payload, fetcher = fetch) {
   let response;
   try {
+    const multipart = payload instanceof FormData;
     response = await fetcher(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(12000),
+      method: 'POST', headers: multipart ? {} : { 'Content-Type': 'application/json' }, body: multipart ? payload : JSON.stringify(payload), signal: AbortSignal.timeout(12000),
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error('Telegram rejected request');
@@ -34,41 +36,41 @@ export async function processUpdate(db, env, update, now = Date.now(), call = te
     const name = command?.[1] || 'help';
     const argument = command?.[3];
     let param = name === 'start' ? argument || '' : name === 'progress' ? 'profile' : name;
-    const messages = {
-      start: 'Привет! Это Aziral Learn. Здесь можно готовиться к экзаменам одному и вместе с друзьями.\n\nВыбери тест или курс, создай свой тест с ИИ или вызови друга на дуэль. Незавершённую тренировку можно продолжить позже.',
-      learn: 'Всё для учёбы — в одном приложении. Выбери, с чего начнём.',
-      tests: 'Выбирай тест по предмету и тренируйся в своём темпе. Ответы сохраняются автоматически, после завершения можно разобрать и повторить ошибки.',
-      courses: 'Курсы сайта и твои материалы. Открывай уроки, проходи тесты к ним и отмечай прогресс. Для купленных курсов привяжи Telegram в профиле aziral.com.',
-      progress: 'Твои результаты и незавершённые тренировки. Продолжи с того же вопроса или повтори ошибки из прошлого теста.',
-      newtest: 'Создай тест по своей теме или конспекту. ИИ предложит вопросы — проверь их и сохрани. Тест сначала будет личным черновиком.',
-      help: 'Как пользоваться Aziral Learn\n\n• Тесты: выбери предмет и тренируйся. Ответы сохраняются, ошибки можно повторить.\n• Курсы: читай уроки и отмечай пройденное.\n• Создать с ИИ: укажи тему или вставь конспект, затем проверь вопросы.\n• Дуэли: выбери тест, создай приглашение и отправь другу. По 15 секунд на вопрос.\n• Прогресс: продолжение тренировок и разбор результатов.\n\nВ группе используй /learn@' + env.TELEGRAM_BOT_USERNAME + ' или /duel@' + env.TELEGRAM_BOT_USERNAME + '. Приглашение в дуэль можно отправить прямо в беседу.',
-    };
-    let message = messages[name] || messages.start;
-    if (param.startsWith('duel_')) message = 'Тебя пригласили на дуэль! Открой приглашение. Игра начнётся после входа второго участника: до 10 вопросов, по 15 секунд на каждый.';
+    const messages = botMessages(env.TELEGRAM_BOT_USERNAME);
+    const copyName = name === 'start' ? ({ profile: 'progress', tests: 'tests', courses: 'courses', newtest: 'newtest' }[param] || 'start') : name;
+    let message = messages[copyName] || messages.start;
+    if (param.startsWith('duel_')) message = 'Тебя ждут в дуэли.\nВходи: до 10 вопросов, по 15 секунд.';
     if (name === 'duel') {
       if (argument) {
         try {
           const site = createSiteClient(env);
           const sourceTest = site && (isSiteId(argument) || isLessonId(argument)) ? await site.test(userId, argument) : null;
           param = 'duel_' + createDuel(db, argument, userId, now, sourceTest);
-          message = 'Дуэль создана! Откройте её и отправьте ссылку другу. После входа второго участника начнётся отсчёт. На каждый вопрос — 15 секунд; в дуэли до 10 вопросов.';
+          message = 'Дуэль готова.\nОтправь приглашение другу. Старт — когда вас двое; до 10 вопросов по 15 секунд.';
         }
         catch (e) { message = e instanceof ApiError ? e.message : 'Не удалось создать дуэль'; param = 'duels'; }
-      } else { message = 'Выберите тест в приложении и нажмите «Дуэль». Отправьте приглашение другу или в группу.'; param = 'duels'; }
+      } else { message = 'Выбери тест → «Создать дуэль» → отправь ссылку другу.'; param = 'duels'; }
     }
     const button = (text, destination) => {
       const url = new URL(env.MINI_APP_URL);
       if (destination) url.searchParams.set('start', destination);
       return m.chat.type === 'private' ? { text, web_app: { url: url.href } } : { text, url: miniLink(env, destination) };
     };
-    const labels = { tests: 'Выбрать тест', courses: 'Открыть курсы', duels: 'Создать дуэль', profile: 'Мой прогресс', newtest: 'Создать тест с ИИ' };
-    const primary = button(param.startsWith('duel_') ? 'Войти в дуэль' : labels[param] || 'Открыть Aziral Learn', param === 'help' ? '' : param);
-    const keyboard = [[primary]];
-    if (!param.startsWith('duel_')) {
-      keyboard.push([button('Тесты', 'tests'), button('Курсы', 'courses')]);
-      keyboard.push([button('Создать с ИИ', 'newtest'), button('Мой прогресс', 'profile')]);
-      if (param !== 'duels') keyboard.push([button('Дуэль с другом', 'duels')]);
-      if (m.chat.type === 'private') keyboard.push([{ text: 'Добавить в группу', url: `https://t.me/${env.TELEGRAM_BOT_USERNAME}?startgroup=learn` }]);
+    const labels = { tests: 'Выбрать тест', courses: 'Открыть курсы', duels: 'Создать дуэль', profile: 'Мой прогресс', newtest: 'Создать с ИИ' };
+    let keyboard;
+    const groupButton = { text: 'В группу', url: `https://t.me/${env.TELEGRAM_BOT_USERNAME}?startgroup=learn` };
+    if (param.startsWith('duel_')) keyboard = [[button('Войти в дуэль', param)]];
+    else if (labels[param]) {
+      const shortcuts = param === 'tests' ? [['Создать с ИИ','newtest'],['Дуэль','duels']] : param === 'newtest' ? [['Тесты','tests'],['Курсы','courses']] : [['Тесты','tests'],['Создать с ИИ','newtest']];
+      keyboard = [[button(labels[param], param)], shortcuts.map(([label, destination]) => button(label, destination)), [button(param === 'profile' ? 'Дуэль' : 'Мой прогресс', param === 'profile' ? 'duels' : 'profile')]];
+      if (m.chat.type === 'private') keyboard[2].push(groupButton);
+    } else {
+      keyboard = [
+        [button('Тесты','tests'),button('Курсы','courses')],
+        [button('Создать с ИИ','newtest'),button('Дуэль','duels')],
+        [button('Мой прогресс','profile')],
+      ];
+      if (m.chat.type === 'private') keyboard[2].push(groupButton);
     }
     const payload = JSON.stringify({ chat_id: m.chat.id, text: message, reply_markup: { inline_keyboard: keyboard } });
     db.prepare('INSERT OR IGNORE INTO bot_updates (id,payload) VALUES (?,?)').run(update.update_id, payload);

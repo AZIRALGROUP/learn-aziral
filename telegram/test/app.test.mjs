@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { openStore } from '../store.mjs';
 import { verifyInitData } from '../auth.mjs';
 import { createApp } from '../server.mjs';
-import { processUpdate } from '../bot.mjs';
+import { processUpdate, telegramCall } from '../bot.mjs';
 
 const token = '123456789:test-token-for-local-tests';
 function signed(id, now, extra = {}) {
@@ -282,5 +282,25 @@ test('bot offers direct useful menus and private help while ignoring ordinary gr
     assert.match(sent[1].text, /Как пользоваться/);
     await processUpdate(db, env, { update_id: 22, message: { ...message, chat: { id: -100, type: 'supergroup' }, text: 'Привет всем!' } }, Date.now(), call);
     assert.equal(sent.length, 2);
+    await processUpdate(db, env, { update_id: 23, message: { ...message, text: '/start' } }, Date.now(), call);
+    const menu = sent[2].reply_markup.inline_keyboard;
+    assert.equal(menu.length, 3); assert.equal(menu.flat().length, 6);
+    assert.ok(sent[2].text.length < 100);
+    assert.equal(new Set(menu.flat().map(b => b.web_app?.url || b.url)).size, 6);
   } finally { db.close(); }
+});
+
+
+test('profile photo upload preserves multipart attachment and automatic boundary headers', async () => {
+  const payload = new FormData();
+  payload.set('photo', JSON.stringify({ type: 'static', photo: 'attach://avatar' }));
+  payload.set('avatar', new Blob(['image fixture'], { type: 'image/jpeg' }), 'avatar.jpg');
+  const result = await telegramCall({ TELEGRAM_BOT_TOKEN: token }, 'setMyProfilePhoto', payload, async (url, request) => {
+    assert.ok(url.endsWith('/setMyProfilePhoto'));
+    assert.equal(request.body, payload);
+    assert.equal(request.headers['Content-Type'], undefined);
+    assert.equal(request.body.get('avatar').type, 'image/jpeg');
+    return Response.json({ ok: true, result: true });
+  });
+  assert.equal(result, true);
 });

@@ -210,7 +210,7 @@ function serveStatic(req, res, url, env) {
     file = resolve(root, 'index.html');
   }
   if (!existsSync(file)) { res.statusCode = 503; return res.end('Run npm run build first, or use Vite at localhost:5174/telegram'); }
-  const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
+  const types = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
   res.setHeader('Content-Type', types[extname(file)] || 'application/octet-stream');
   res.setHeader('Cache-Control', extname(file) === '.html' ? 'no-store' : 'public, max-age=3600');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://t.me");
