@@ -1,6 +1,6 @@
-// Forwards /api/* to the API service on Render — see AZIRAL-group for the
-// service itself. Keeps the shared .aziral.com auth cookie first-party.
-const API_ORIGIN = 'https://aziral-api.onrender.com';
+// Forwards /api/* to the API on the Netcup VPS (moved off Render 2026-10-02,
+// see AZIRAL-group). Keeps the shared .aziral.com auth cookie first-party.
+const API_ORIGIN = 'https://aziral-api.89-58-7-87.sslip.io';
 
 export async function onRequest({ request }) {
   const url = new URL(request.url);
