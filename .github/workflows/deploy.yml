@@ -2,56 +2,127 @@ name: CI-CD-Learn-Aziral
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Preserve uploads and queue pushes. Delayed events also pass a main guard.
+concurrency:
+  group: learn-pages-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    outputs:
+      current: ${{ github.ref != 'refs/heads/main' || steps.source.outputs.current == 'true' }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: npm
+
+      - name: Check deployment guards and verification
+        run: node --test scripts/*.test.mjs
+
+      - name: Skip superseded production commits
+        if: github.ref == 'refs/heads/main'
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-deployment-source.mjs
+
+      - name: Verify access to Cloudflare before building
+        if: github.ref == 'refs/heads/main' && steps.source.outputs.current == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/check-cloudflare-project.mjs
 
       - name: Install dependencies
+        if: github.ref != 'refs/heads/main' || steps.source.outputs.current == 'true'
         run: npm ci
 
       - name: Run tests
+        if: github.ref != 'refs/heads/main' || steps.source.outputs.current == 'true'
         run: npm test
 
       - name: Run Telegram backend and integration tests
+        if: github.ref != 'refs/heads/main' || steps.source.outputs.current == 'true'
         run: npm run telegram:test
 
       - name: Build
+        if: github.ref != 'refs/heads/main' || steps.source.outputs.current == 'true'
         run: npm run build
+
+      - name: Stamp the built artifact
+        if: github.ref == 'refs/heads/main' && steps.source.outputs.current == 'true'
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync('dist/deployment.json', JSON.stringify({ commit: process.env.GITHUB_SHA, builtAt: new Date().toISOString() }) + '\n');
+          NODE
+
+      - name: Keep the tested artifact for publication
+        if: github.ref == 'refs/heads/main' && steps.source.outputs.current == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: learn-site-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && needs.test.outputs.current == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          envs: DEPLOY_TOKEN
-          script_stop: true
-          # Use centralized deploy script on the server:
-          #   /home/olzhas/bin/deploy-learn-aziral.sh
-          # It clones repo, builds image, recreates container,
-          # reloads NGINX Proxy Manager (fixes 502 after recreate)
-          # and verifies HTTP 200.
-          script: /home/olzhas/bin/deploy-learn-aziral.sh
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: learn-site-${{ github.sha }}
+          path: dist/
+
+      - name: Recheck main immediately before publication
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-deployment-source.mjs
+
+      - name: Verify the destination project
+        if: steps.source.outputs.current == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/check-cloudflare-project.mjs
+
+      - name: Publish to Cloudflare Pages
+        if: steps.source.outputs.current == 'true'
+        id: publish
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.151.3'
+          command: pages deploy dist --project-name learn-aziral --branch main --commit-hash ${{ github.sha }} --commit-dirty=true
+
+      - name: Verify the delivered artifact and API
+        if: steps.source.outputs.current == 'true'
+        run: node scripts/verify-pages-deployment.mjs "$GITHUB_SHA"
+
+      - name: Write deployment summary
+        if: steps.source.outputs.current == 'true'
+        env:
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          printf '### Learn published\n\nCommit: `%s`\n\n[Production](https://learn.aziral.com/) · [Deployment](%s)\n' "$GITHUB_SHA" "$DEPLOYMENT_URL" >> "$GITHUB_STEP_SUMMARY"

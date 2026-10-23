@@ -2,6 +2,9 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
+/deployment.json
+  Cache-Control: no-store
+
 /instructor
   X-Robots-Tag: noindex, nofollow
 /instructor/*
