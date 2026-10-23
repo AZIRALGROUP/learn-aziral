@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
 function setMeta(name: string, content: string) {
   let el = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
@@ -18,9 +19,14 @@ function setCanonical(url: string) {
   el.href = url;
 }
 
-const BASE_URL = "https://aziral.com";
-const DEFAULT_TITLE = "AZIRAL — IT-разработка в Астане | Сайты, Приложения, DevOps";
-const DEFAULT_DESC = "Профессиональная IT-команда из Казахстана. Разрабатываем сайты, мобильные приложения, настраиваем серверы и DevOps-инфраструктуру. Более 7 лет опыта.";
+const BASE_URL = "https://learn.aziral.com";
+const DEFAULT_TITLE = "AZIRAL Learn — Онлайн-курсы";
+const DEFAULT_DESC = "Онлайн-курсы, практика и тесты по разработке от команды AZIRAL. Учитесь у практикующих разработчиков.";
+
+export function isPrivateLearningPath(path: string) {
+  return /^\/(?:instructor|profile|practice|login|register)(?:\/|$)/.test(path)
+    || /^\/courses\/[^/]+\/learn(?:\/|$)/.test(path);
+}
 
 interface SEOOptions {
   description?: string;
@@ -28,13 +34,15 @@ interface SEOOptions {
 }
 
 export function usePageTitle(title: string, options: SEOOptions = {}) {
+  const { pathname } = useLocation();
   useEffect(() => {
-    const fullTitle = title ? `${title} | AZIRAL` : DEFAULT_TITLE;
+    const fullTitle = title ? (title.includes("AZIRAL") ? title : `${title} | AZIRAL Learn`) : DEFAULT_TITLE;
     const desc = options.description || DEFAULT_DESC;
-    const canonical = `${BASE_URL}${options.path || ""}`;
+    const canonical = `${BASE_URL}${options.path || pathname}`;
 
     document.title = fullTitle;
     setMeta("description", desc);
+    setMeta("robots", isPrivateLearningPath(pathname) ? "noindex, nofollow" : "index, follow");
     setCanonical(canonical);
     setOg("og:title", fullTitle);
     setOg("og:description", desc);
@@ -43,10 +51,11 @@ export function usePageTitle(title: string, options: SEOOptions = {}) {
     return () => {
       document.title = DEFAULT_TITLE;
       setMeta("description", DEFAULT_DESC);
+      setMeta("robots", "index, follow");
       setCanonical(`${BASE_URL}/`);
       setOg("og:title", DEFAULT_TITLE);
       setOg("og:description", DEFAULT_DESC);
       setOg("og:url", `${BASE_URL}/`);
     };
-  }, [title, options.description, options.path]);
+  }, [title, options.description, options.path, pathname]);
 }

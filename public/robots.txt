@@ -1,9 +1,7 @@
 User-agent: *
 Allow: /
 Allow: /study
-Disallow: /instructor/
-Disallow: /instructor/courses/
-Disallow: /instructor/tests/
-Disallow: /profile
+Disallow: /api/
+# Private pages remain crawlable so search engines can see X-Robots-Tag: noindex.
 
 Sitemap: https://learn.aziral.com/sitemap.xml
