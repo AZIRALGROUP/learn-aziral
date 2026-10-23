@@ -206,7 +206,7 @@ export function CoursesPage() {
   const { t, i18n } = useTranslation();
   usePageTitle(t("courses.page_title"), {
     description: "IT-курсы от команды AZIRAL: веб-разработка, мобильные приложения, DevOps. Практические знания от реальных специалистов из Казахстана.",
-    path: "/courses",
+    path: "/",
   });
   const { user } = useAuth();
 
